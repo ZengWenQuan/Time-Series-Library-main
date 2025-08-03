@@ -1,87 +1,107 @@
-
 import os
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
+import yaml
+from utils.stellar_metrics import Scaler
+
 
 class Dataset_Spectral(Dataset):
-    def __init__(self, root_path, flag='train', size=None,
-                 features='MS', data_path='ETTh1.csv',
-                 target='OT', scale=True, timeenc=0, freq='h',
-                 percent=10, max_len=-1, train_all=False):
-        # size [seq_len, label_len, pred_len]
-        # info
-        if size == None:
-            self.seq_len = 24 * 4 * 4
-            self.label_len = 24 * 4
-            self.pred_len = 24 * 4
-        else:
-            self.seq_len = size[0]
-            self.label_len = size[1]
-            self.pred_len = size[2]
+    def __init__(self, args, flag='train', label_scaler=None, feature_scaler=None):
+        self.args = args
+        self.feature_size = args.feature_size
+        self.label_size = args.label_size
+        
         # init
         assert flag in ['train', 'test', 'val']
         type_map = {'train': 0, 'val': 1, 'test': 2}
         self.set_type = type_map[flag]
 
-        self.features = features
-        self.target = target
-        self.scale = scale
-        self.timeenc = timeenc
-        self.freq = freq
-        self.percent = percent
-        self.root_path = root_path
-        self.data_path = data_path
+        self.targets = args.targets
+        self.ratio = args.split_ratio
+        self.root_path = args.root_path
+        
+        self.feature_scaler = feature_scaler
+        self.label_scaler = label_scaler
+        
         self.__read_data__()
 
     def __read_data__(self):
         # Load the datasets
-        features_continuum_df = pd.read_csv(os.path.join(self.root_path, 'final_spectra_continuum.csv'))
-        features_normalized_df = pd.read_csv(os.path.join(self.root_path, 'final_spectra_normalized.csv'))
-        labels_df = pd.read_csv(os.path.join(self.root_path, 'removed_with_rv.csv'))
+        features_continuum_df = pd.read_csv(os.path.join(self.root_path, self.args.spectra_continuum_path))
+        features_normalized_df = pd.read_csv(os.path.join(self.root_path, self.args.spectra_normalized_path))
+        labels_df = pd.read_csv(os.path.join(self.root_path, self.args.label_path))
         
-        # Merge the datasets on 'obsid'
-        df_merged = pd.merge(features_continuum_df, labels_df, on='obsid')
-        df_merged = pd.merge(df_merged, features_normalized_df, on='obsid', suffixes=['_continuum', '_normalized'])
-
-        # Get feature and target columns
-        feature_cols_continuum = [col for col in features_continuum_df.columns if col != 'obsid']
-        feature_cols_normalized = [col for col in features_normalized_df.columns if col != 'obsid']
-        target_cols = ['Teff', 'logg', 'FeH', 'CFe']
-
-        # Separate features and targets
-        self.data_x_continuum = df_merged[feature_cols_continuum].values
-        self.data_x_normalized = df_merged[feature_cols_normalized].values
-        self.data_y = df_merged[target_cols].values
-
-        # Combine the two feature sets
-        self.data_x = np.concatenate((self.data_x_continuum, self.data_x_normalized), axis=1)
-
-        # Split data
-        num_train = int(len(df_merged) * 0.7)
-        num_test = int(len(df_merged) * 0.2)
-        num_vali = len(df_merged) - num_train - num_test
+        # Find common obsids
+        common_obsids = list(set(features_continuum_df['obsid']) & set(features_normalized_df['obsid']) & set(labels_df['obsid']))
         
-        border1s = [0, num_train - self.seq_len, len(df_merged) - num_test - self.seq_len]
-        border2s = [num_train, num_train + num_vali, len(df_merged)]
-        border1 = border1s[self.set_type]
-        border2 = border2s[self.set_type]
+        # Filter and sort dataframes by common obsids
+        features_continuum_df = features_continuum_df[features_continuum_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
+        features_normalized_df = features_normalized_df[features_normalized_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
+        labels_df = labels_df[labels_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
 
-        self.data_x = self.data_x[border1:border2]
-        self.data_y = self.data_y[border1:border2]
+        # Get feature and target columns based on feature_size
+        feature_cols_continuum = features_continuum_df.columns[1:self.feature_size+1]
+        feature_cols_normalized = features_normalized_df.columns[1:self.feature_size+1]
+
+        # Separate feature sets
+        data_x_continuum = features_continuum_df[feature_cols_continuum].values
+        data_x_normalized = features_normalized_df[feature_cols_normalized].values
+        data_y = labels_df[self.targets].values
+
+        # Split data based on ratio
+        total_samples = len(common_obsids)
+        train_ratio, val_ratio, _ = self.ratio
+        train_boundary = int(total_samples * train_ratio)
+        val_boundary = int(total_samples * (train_ratio + val_ratio))
+
+        # Transform only the continuum features
+        if self.feature_scaler:
+            data_x_continuum_scaled = self.feature_scaler.transform(data_x_continuum)
+        else:
+            data_x_continuum_scaled = data_x_continuum
+        
+        # Concatenate scaled continuum features with the original normalized features
+        data_x = np.concatenate((data_x_continuum_scaled, data_x_normalized), axis=1)
+
+        # Transform labels if a scaler is provided
+        if self.label_scaler:
+            data_y_scaled = self.label_scaler.transform(data_y)
+        else:
+            data_y_scaled = data_y
+        
+        # Define borders for train, val, test sets
+        if self.set_type == 0:  # train
+            border1, border2 = 0, train_boundary
+        elif self.set_type == 1:  # val
+            border1, border2 = train_boundary, val_boundary
+        else:  # test
+            border1, border2 = val_boundary, total_samples
+
+        self.data_x = data_x[border1:border2]
+        self.data_y = data_y_scaled[border1:border2]
+        self.obsids = labels_df.iloc[border1:border2, 0].values
+        self.raw_data_y = data_y[border1:border2]
 
     def __getitem__(self, index):
-        # The model will expect seq_x, seq_y, seq_x_mark, seq_y_mark
-        # For this simple case, we can return dummy values for the mark arrays
-        s_begin = index
-        s_end = s_begin + self.seq_len
-        r_begin = s_end - self.label_len
-        r_end = r_begin + self.label_len + self.pred_len
+        seq_x = self.data_x[index]
+        seq_y = self.data_y[index]
 
-        seq_x = self.data_x[s_begin:s_end]
-        seq_y = self.data_y[r_begin:r_end]
-        
-        return seq_x, seq_y, np.zeros_like(seq_x), np.zeros_like(seq_y)
+        # Dummy values for mark arrays as they are not used in this task
+        seq_x_mark = np.zeros((seq_x.shape[0], 1))
+        seq_y_mark = np.zeros((seq_y.shape[0], 1))
+        obsid = self.obsids[index]
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark, obsid
 
     def __len__(self):
-        return len(self.data_x) - self.seq_len + 1
+        return len(self.data_x)
+
+    def inverse_transform(self, data):
+        if self.label_scaler:
+            return self.label_scaler.inverse_transform(data)
+        else:
+            return data
+            
+    def get_raw_targets(self):
+        return self.raw_data_y

@@ -1,0 +1,17 @@
+# MPBDNet Model Configuration
+
+# Whether to use Batch Normalization in the network
+batch_norm: True
+
+# List of output channel sizes for each of the three MPBD blocks.
+# The input channel to the first block is always 1.
+list_inplanes: [16, 32, 64]
+
+# The embedding dimension after the convolutional blocks.
+embedding_c: 128
+
+# The hidden size for the LSTM layers.
+rnn_hidden_size: 128
+
+# A list defining the hidden neuron counts for the final fully-connected layers.
+fc_hidden_dims: [256, 128]

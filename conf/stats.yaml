@@ -1,0 +1,54 @@
+Teff:
+  mean: 5218.311265040202
+  variance: 440103.4935417096
+  std_dev: 663.4029646766056
+  min: 3219.9282
+  max: 7252.2715
+  25th_percentile: 4724.719
+  median_50th_percentile: 5054.0083
+  75th_percentile: 5793.2266
+logg:
+  mean: 2.9632400418516545
+  variance: 1.061569783877292
+  std_dev: 1.0303250865029405
+  min: -0.3892491
+  max: 5.7676373
+  25th_percentile: 2.30091
+  median_50th_percentile: 2.8880606
+  75th_percentile: 3.845
+FeH:
+  mean: -1.0639017063801564
+  variance: 0.9472559650896607
+  std_dev: 0.9732707563107301
+  min: -4.293
+  max: 0.53299844
+  25th_percentile: -2.011
+  median_50th_percentile: -0.84661156
+  75th_percentile: -0.214989
+CFe:
+  mean: 0.20370417815331393
+  variance: 0.213250475810126
+  std_dev: 0.4617905107406669
+  min: -2.018
+  max: 4.803
+  25th_percentile: -0.024844855
+  median_50th_percentile: 0.075890005
+  75th_percentile: 0.31336996
+CH:
+  mean: -0.8601975282477105
+  variance: 0.7062687647056803
+  std_dev: 0.8403979799509755
+  min: -5.009
+  max: 1.6869999999999998
+  25th_percentile: -1.491
+  median_50th_percentile: -0.72732758
+  75th_percentile: -0.17702284
+flux:
+  mean: 2091.4149877590785
+  variance: 29845344.79308813
+  std_dev: 5463.089308540373
+  min: 1.0e-09
+  max: 60717.42605297178
+  25th_percentile: 136.95295902862927
+  median_50th_percentile: 481.4963256389092
+  75th_percentile: 1618.2711704103758

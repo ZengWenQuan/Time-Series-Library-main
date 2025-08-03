@@ -21,31 +21,63 @@ class Scaler:
     """
     标签缩放类，支持StandardScaler、MinMaxScaler和RobustScaler三种方法
     """
-    def __init__(self, scaler_type='standard'):
+    def __init__(self, scaler_type='standard', stats_dict=None, target_names=None):
         """
         初始化标签缩放器
         
         Args:
             scaler_type: 缩放器类型，可选'standard'、'minmax'或'robust'
+            stats_dict: (可选) 包含预计算统计数据的字典。键是目标名称，值是包含统计信息的字典。
+            target_names: (可选) 需要使用的目标名称列表，用于从stats_dict中筛选和排序。
         """
+        self.scaler_type = scaler_type
+        self.target_names = target_names
+
         if scaler_type == 'standard':
             self.scaler = StandardScaler()
+            if stats_dict and self.target_names:
+                means = [stats_dict[name]['mean'] for name in self.target_names if name in stats_dict]
+                std_devs = [stats_dict[name]['std_dev'] for name in self.target_names if name in stats_dict]
+                if len(means) == len(self.target_names):
+                    self.scaler.mean_ = np.array(means)
+                    self.scaler.scale_ = np.array(std_devs)
+        
         elif scaler_type == 'minmax':
             self.scaler = MinMaxScaler()
+            if stats_dict and self.target_names:
+                mins = [stats_dict[name]['min'] for name in self.target_names if name in stats_dict]
+                maxs = [stats_dict[name]['max'] for name in self.target_names if name in stats_dict]
+                if len(mins) == len(self.target_names):
+                    data_min = np.array(mins)
+                    data_max = np.array(maxs)
+                    self.scaler.scale_ = 1.0 / (data_max - data_min)
+                    self.scaler.min_ = -data_min * self.scaler.scale_
+                    self.scaler.data_min_ = data_min
+                    self.scaler.data_max_ = data_max
+                    self.scaler.data_range_ = data_max - data_min
+
         elif scaler_type == 'robust':
             self.scaler = RobustScaler()
-        else:
-            raise ValueError(f"不支持的缩放器类型: {scaler_type}，请选择'standard'、'minmax'或'robust'")
-        
-        self.scaler_type = scaler_type
-    
-    def fit(self, data):
+            if stats_dict and self.target_names:
+                centers = [stats_dict[name]['median_50th_percentile'] for name in self.target_names if name in stats_dict]
+                q1s = [stats_dict[name]['25th_percentile'] for name in self.target_names if name in stats_dict]
+                q3s = [stats_dict[name]['75th_percentile'] for name in self.target_names if name in stats_dict]
+                if len(centers) == len(self.target_names):
+                    self.scaler.center_ = np.array(centers)
+                    self.scaler.scale_ = np.array(q3s) - np.array(q1s)
+        elif scaler_type is not None:
+            raise ValueError(f"不支持的缩放器类型: {scaler_type}")
+
+    def fit(self, data, target_names=None):
         """
         拟合标签缩放器
         
         Args:
             data: 形状为[samples, features]的数据
+            target_names: (可选) 目标名称列表
         """
+        if target_names:
+            self.target_names = target_names
         return self.scaler.fit(data)
     
     def transform(self, data):
@@ -410,7 +442,7 @@ def format_feh_classification_metrics(metrics_dict):
 
 def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="test"):
     """
-    保存回归指标到CSV文件，并生成预测值与真实值的对比图
+    保存回归指标到CSV文件，并生成预测值与真实值的对比图（矢量图PDF格式），图中包含关键指标。
     
     Args:
         metrics_dict: 包含各种指标的字典
@@ -418,11 +450,9 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
         param_names: 参数名称列表
         phase: 阶段名称，如'best'或'last'
     """
-    if not save_dir :
-        #print(f"save_dir: {save_dir} not found")
+    if not save_dir:
         return
     if not os.path.exists(save_dir):
-        #print(f"save_dir: {save_dir} not found, create it")
         os.makedirs(save_dir)
         
     if param_names is None:
@@ -432,14 +462,10 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
     regression_dir = os.path.join(save_dir, phase, 'regression')
     os.makedirs(regression_dir, exist_ok=True)
     
-    # 保存回归指标到CSV文件
+    # ... (The CSV saving part remains the same) ...
     metrics_file = os.path.join(regression_dir, 'metrics.csv')
-    
-    # 提取每个参数的指标
     metrics_data = []
     metrics_types = ['mae', 'mse', 'rmse', 'r2', 'mape']
-    
-    # 添加整体指标
     overall_metrics = {'Parameter': 'Overall'}
     for metric in metrics_types:
         if metric in metrics_dict:
@@ -448,8 +474,6 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
             else:
                 overall_metrics[metric.upper()] = f"{metrics_dict[metric]:.4f}"
     metrics_data.append(overall_metrics)
-    
-    # 添加每个参数的指标
     for param in param_names:
         param_metrics = {'Parameter': param}
         for metric in metrics_types:
@@ -460,8 +484,6 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
                 else:
                     param_metrics[metric.upper()] = f"{metrics_dict[key]:.4f}"
         metrics_data.append(param_metrics)
-    
-    # 保存到CSV
     with open(metrics_file, 'w', newline='') as csvfile:
         fieldnames = ['Parameter'] + [m.upper() + '(%)' if m == 'mape' else m.upper() for m in metrics_types]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -469,10 +491,24 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
         for row in metrics_data:
             writer.writerow(row)
     
+    # --- Modified Plotting Section ---
     # 创建预测值与真实值的对比图
-    plt.figure(figsize=(15, 10))
-    
+    num_params = len(param_names)
+    # Adjust layout based on number of parameters
+    if num_params <= 2:
+        n_cols = num_params
+        n_rows = 1
+        figsize = (8 * n_cols, 6)
+    else:
+        n_cols = 2
+        n_rows = (num_params + 1) // 2
+        figsize = (15, 6 * n_rows)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    axes = axes.flatten()
+
     for i, param in enumerate(param_names):
+        ax = axes[i]
         pred_key = f'{param}_pred'
         true_key = f'{param}_true'
         
@@ -480,150 +516,149 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
             pred = metrics_dict[pred_key]
             true = metrics_dict[true_key]
             
-            plt.subplot(2, 2, i+1)
-            plt.scatter(pred, true, alpha=0.5)
+            ax.scatter(pred, true, alpha=0.5, s=10) # Smaller points for clarity
             
             # 添加对角线
             min_val = min(np.min(pred), np.min(true))
             max_val = max(np.max(pred), np.max(true))
-            plt.plot([min_val, max_val], [min_val, max_val], 'r--')
+            ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1)
             
-            plt.title(f'{param} Prediction vs Truth')
-            plt.xlabel('Predicted Value')
-            plt.ylabel('True Value')
-            plt.grid(True)
-    
+            ax.set_title(f'{param} Prediction vs Truth')
+            ax.set_xlabel('Predicted Value')
+            ax.set_ylabel('True Value')
+            ax.grid(True)
+
+            # --- Add Metrics Annotation ---
+            mae = metrics_dict.get(f'{param}_mae', float('nan'))
+            rmse = metrics_dict.get(f'{param}_rmse', float('nan'))
+            r2 = metrics_dict.get(f'{param}_r2', float('nan'))
+            
+            metrics_text = f"MAE: {mae:.4f}\nRMSE: {rmse:.4f}\nR²: {r2:.4f}"
+            
+            ax.text(0.95, 0.95, metrics_text,
+                    transform=ax.transAxes, fontsize=10,
+                    verticalalignment='top', horizontalalignment='right',
+                    bbox=dict(boxstyle='round,pad=0.4', fc='wheat', alpha=0.5))
+
+    # Hide any unused subplots
+    for j in range(num_params, len(axes)):
+        fig.delaxes(axes[j])
+
     plt.tight_layout()
-    plt.savefig(os.path.join(regression_dir, 'prediction_vs_truth.png'))
-    plt.close()
+    # Save as PDF (vector graphics) file
+    plt.savefig(os.path.join(regression_dir, 'prediction_vs_truth.pdf'))
+    plt.close(fig)
 
 def save_feh_classification_metrics(metrics_dict, save_dir, phase="test"):
     """
-    保存FeH分类指标到CSV文件
+    保存FeH分类指标到CSV文件，并生成PDF格式的可视化图表。
     
     Args:
         metrics_dict: 包含分类指标的字典
         save_dir: 保存目录
         phase: 阶段名称，如'best'或'last'
     """
-    if not save_dir :
-        #print(f"save_dir: {save_dir} not found")
+    if not save_dir:
         return
     if not os.path.exists(save_dir):
-        #print(f"save_dir: {save_dir} not found, create it")
         os.makedirs(save_dir)
+    
     # 创建分类指标保存目录
     classification_dir = os.path.join(save_dir, phase, 'classification')
     os.makedirs(classification_dir, exist_ok=True)
     
-    # 保存分类指标到CSV文件
+    # ... (CSV saving part remains the same) ...
     metrics_file = os.path.join(classification_dir, 'metrics.csv')
-    
-    # 准备数据
     metrics_data = []
-    
-    # 添加整体准确率
-    metrics_data.append({
-        'Metric': 'Overall Accuracy',
-        'Value': f"{metrics_dict['accuracy']:.4f}"
-    })
-    
-    # 添加宏平均和加权平均指标
+    metrics_data.append({'Metric': 'Overall Accuracy', 'Value': f"{metrics_dict['accuracy']:.4f}"})
     for avg_type in ['macro', 'weighted']:
         for metric in ['precision', 'recall', 'f1']:
             key = f'{avg_type}_{metric}'
             if key in metrics_dict:
-                metrics_data.append({
-                    'Metric': f'{avg_type.title()} {metric.title()}',
-                    'Value': f"{metrics_dict[key]:.4f}"
-                })
-    
-    # 添加每个类别的指标
+                metrics_data.append({'Metric': f'{avg_type.title()} {metric.title()}', 'Value': f"{metrics_dict[key]:.4f}"})
     class_names = metrics_dict['class_names']
     for class_name in class_names:
         for metric in ['precision', 'recall', 'f1']:
             key = f'{class_name}_{metric}'
             if key in metrics_dict:
-                metrics_data.append({
-                    'Metric': f'{class_name} {metric.title()}',
-                    'Value': f"{metrics_dict[key]:.4f}"
-                })
-    
-    # 保存到CSV
+                metrics_data.append({'Metric': f'{class_name} {metric.title()}', 'Value': f"{metrics_dict[key]:.4f}"})
     with open(metrics_file, 'w', newline='') as csvfile:
         fieldnames = ['Metric', 'Value']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for row in metrics_data:
             writer.writerow(row)
-    
-    # 保存混淆矩阵到CSV
     cm_file = os.path.join(classification_dir, 'confusion_matrix.csv')
     cm = metrics_dict['confusion_matrix']
-    
     with open(cm_file, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        # 写入表头
         writer.writerow(['True/Pred'] + class_names)
-        # 写入每一行
         for i, class_name in enumerate(class_names):
             writer.writerow([class_name] + list(cm[i]))
-    
-    # 创建混淆矩阵可视化
-    plt.figure(figsize=(10, 8))
-    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    plt.title('Confusion Matrix')
-    plt.colorbar()
+
+    # --- Modified Confusion Matrix Plot ---
+    fig, ax = plt.subplots(figsize=(10, 8))
+    cax = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    fig.colorbar(cax)
+    ax.set_title('Confusion Matrix')
     tick_marks = np.arange(len(class_names))
-    plt.xticks(tick_marks, class_names, rotation=45)
-    plt.yticks(tick_marks, class_names)
+    ax.set_xticks(tick_marks)
+    ax.set_xticklabels(class_names, rotation=45)
+    ax.set_yticks(tick_marks)
+    ax.set_yticklabels(class_names)
     
-    # 在每个格子中添加数字
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            plt.text(j, i, format(cm[i, j], 'd'),
-                     horizontalalignment="center",
-                     color="white" if cm[i, j] > thresh else "black")
+            ax.text(j, i, format(cm[i, j], 'd'),
+                    horizontalalignment="center",
+                    color="white" if cm[i, j] > thresh else "black")
     
+    ax.set_ylabel('True label')
+    ax.set_xlabel('Predicted label')
     plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.savefig(os.path.join(classification_dir, 'confusion_matrix.png'))
-    plt.close()
+    plt.savefig(os.path.join(classification_dir, 'confusion_matrix.pdf'))
+    plt.close(fig)
     
-    # 创建FeH预测值与真实值的散点图
+    # --- Modified FeH Prediction vs Truth Plot ---
     if 'feh_pred' in metrics_dict and 'feh_true' in metrics_dict:
-        plt.figure(figsize=(10, 8))
-        
-        # 获取不同类别的颜色
+        fig, ax = plt.subplots(figsize=(10, 8))
         colors = ['red', 'blue', 'green', 'purple']
         
-        # 为每个类别绘制散点图
         for i, class_name in enumerate(class_names):
             mask = metrics_dict['y_true'] == i
-            plt.scatter(
+            ax.scatter(
                 metrics_dict['feh_pred'][mask],
                 metrics_dict['feh_true'][mask],
                 c=colors[i],
                 label=class_name,
-                alpha=0.6
+                alpha=0.6,
+                s=10
             )
         
-        # 添加对角线
         min_val = min(np.min(metrics_dict['feh_pred']), np.min(metrics_dict['feh_true']))
         max_val = max(np.max(metrics_dict['feh_pred']), np.max(metrics_dict['feh_true']))
-        plt.plot([min_val, max_val], [min_val, max_val], 'k--')
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=1)
         
-        # 添加类别边界线
         for boundary in [-3, -2, -1]:
-            plt.axhline(y=boundary, color='gray', linestyle='--', alpha=0.5)
-            plt.axvline(x=boundary, color='gray', linestyle='--', alpha=0.5)
+            ax.axhline(y=boundary, color='gray', linestyle='--', alpha=0.5)
+            ax.axvline(x=boundary, color='gray', linestyle='--', alpha=0.5)
         
-        plt.title('FeH Prediction vs Truth')
-        plt.xlabel('Predicted FeH')
-        plt.ylabel('True FeH')
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(os.path.join(classification_dir, 'feh_prediction_vs_truth.png'))
-        plt.close() 
+        ax.set_title('FeH Prediction vs Truth')
+        ax.set_xlabel('Predicted FeH')
+        ax.set_ylabel('True FeH')
+        ax.legend(loc='lower right')
+        ax.grid(True)
+
+        # Add Metrics Annotation
+        accuracy = metrics_dict.get('accuracy', float('nan'))
+        macro_f1 = metrics_dict.get('macro_f1', float('nan'))
+        metrics_text = f"Accuracy: {accuracy:.4f}\nMacro F1: {macro_f1:.4f}"
+        ax.text(0.95, 0.95, metrics_text,
+                transform=ax.transAxes, fontsize=12,
+                verticalalignment='top', horizontalalignment='right',
+                bbox=dict(boxstyle='round,pad=0.4', fc='wheat', alpha=0.5))
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(classification_dir, 'feh_prediction_vs_truth.pdf'))
+        plt.close(fig)

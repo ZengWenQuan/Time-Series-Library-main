@@ -1,0 +1,29 @@
+# MLP Model Configuration
+architecture:
+  # Defines the sequence of layers in the MLP.
+  # Each item represents a layer, with its type and parameters.
+  - type: linear
+    neurons: 2048
+  - type: relu
+  - type: dropout
+    rate: 0.1 # This rate will be overridden by the command-line --dropout argument
+
+  - type: linear
+    neurons: 1024
+  - type: relu
+  - type: dropout
+    rate: 0.1
+
+  - type: linear
+    neurons: 512
+  - type: relu
+  - type: dropout
+    rate: 0.1
+
+  - type: linear
+    neurons: 256
+  - type: relu
+  - type: dropout
+    rate: 0.1
+
+# The final output layer is added automatically based on `label_size`

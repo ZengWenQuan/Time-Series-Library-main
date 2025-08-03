@@ -34,6 +34,9 @@ if __name__ == '__main__':
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
+    parser.add_argument('--model_conf', type=str, default=None, help='path to the model-specific configuration file')
+
+    # -- data parser
     parser.add_argument('--data', type=str, required=True, default='ETTm1',
                         help='dataset type')
     parser.add_argument('--root_path', type=str, default='./dataset/ETT/', help='root path of the data file')
@@ -127,8 +130,10 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
+    parser.add_argument('--max_grad_norm', type=float, default=1.0, help='max norm of the gradients')
     parser.add_argument('--des', type=str, default='test', help='exp description')
-    parser.add_argument('--loss', type=str, default='MSE', help='loss function')
+    parser.add_argument('--loss', type=str, default='mse', help='loss function')
+    parser.add_argument('--loss_threshold', type=float, default=100000.0, help='threshold for skipping batches with abnormally high loss')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
     parser.add_argument('--vali_interval', type=int, default=1, help='vali interval')
@@ -185,6 +190,10 @@ if __name__ == '__main__':
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
+    parser.add_argument('--stats_path', type=str, default=None, help='path to the stats file')
+    parser.add_argument('--spectra_continuum_path', type=str, default='final_spectra_continuum.csv', help='path to the spectra continuum file')
+    parser.add_argument('--spectra_normalized_path', type=str, default='final_spectra_normalized.csv', help='path to the spectra normalized file')
+    parser.add_argument('--label_path', type=str, default='removed_with_rv.csv', help='path to the label file')
 
     args = parser.parse_args()
     

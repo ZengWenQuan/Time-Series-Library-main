@@ -22,7 +22,7 @@ data_dict = {
 }
 
 
-def data_provider(args, flag):
+def data_provider(args, flag, label_scaler=None, feature_scaler=None):
     Data = data_dict[args.data] # 根据args.dataset选择数据集类
     timeenc = 0 if args.embed != 'timeF' else 1
 
@@ -77,6 +77,22 @@ def data_provider(args, flag):
             shuffle=shuffle_flag,
             num_workers=args.num_workers,
             drop_last=drop_last)
+        return data_set, data_loader
+    elif args.task_name == 'spectral_prediction':
+        data_set = Data(
+            args=args,
+            flag=flag,
+            label_scaler=label_scaler,
+            feature_scaler=feature_scaler
+        )
+        print(flag, len(data_set))
+        data_loader = DataLoader(
+            data_set,
+            batch_size=batch_size,
+            shuffle=shuffle_flag,
+            num_workers=args.num_workers,
+            drop_last=drop_last
+        )
         return data_set, data_loader
     else:
         if args.data == 'm4':
