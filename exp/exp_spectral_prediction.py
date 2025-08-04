@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import mlflow
 import matplotlib.pyplot as plt
 
 from utils.stellar_metrics import Scaler
@@ -198,6 +199,14 @@ class Exp_Spectral_Prediction(Exp_Basic):
         return np.average(total_loss) , all_preds , all_trues
 
     def train(self,setting):
+        # --- MLflow Setup ---
+        # 设置实验名称，如果不存在则会自动创建
+        mlflow.set_experiment(self.args.task_name)
+        # 开始一次MLflow运行，所有记录都将保存在这个运行下
+        mlflow.start_run(run_name=f"{self.args.model}_{self.args.model_id}")
+        # 记录所有超参数
+        mlflow.log_params(vars(self.args))
+
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
@@ -319,7 +328,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 log_message += f"Test Loss: {test_loss:.4f} "
             log_message += (
                 f"Vali Interval: {self.args.vali_interval},"
-                f"epoch_time: {time.time() - epoch_time :.2f }s  left_time: {left_time//3600:.2f}h{(left_time%3600)//60:.2f}m{left_time%60:.2f}s | "
+                f"epoch_time: {(time.time() - epoch_time):.2f}s  left_time: {left_time//3600:.0f}h{(left_time%3600)//60:.0f}m{left_time%60:.0f}s | "
                 f"lr:{current_lr:.2f} "
                 f"{grad_info}"
             )
@@ -366,12 +375,40 @@ class Exp_Spectral_Prediction(Exp_Basic):
             self._plot_curve({'Train Loss': history_train_loss, 'Validation Loss': history_vali_loss}, 'Loss', 'Loss', 'loss')
             self._plot_curve({'Learning Rate': history_lr}, 'Learning Rate', 'Learning Rate', 'lr')
 
+            # --- MLflow Logging ---
+            mlflow.log_metric('train_loss', train_loss, step=epoch)
+            if vali_loss is not None:
+                mlflow.log_metric('val_loss', vali_loss, step=epoch)
+            mlflow.log_metric('learning_rate', current_lr, step=epoch)
+
+            # Log MAE for each validation target
+            if metrics_dict_vali:
+                for metric_name, metric_value in metrics_dict_vali.items():
+                    if 'mae' in metric_name.lower(): # Log overall MAE and per-label MAE
+                        mlflow.log_metric(f'val_{metric_name}', metric_value, step=epoch)
+            
+            # Log MAE for each test target
+            if test_data is not None and metrics_dict_test:
+                for metric_name, metric_value in metrics_dict_test.items():
+                    if 'mae' in metric_name.lower():
+                        mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
+
             adjust_learning_rate(model_optim, epoch + 1, self.args)
             
         last_model_path = chechpoint_path + '/' + 'last.pth'
         torch.save(self.model.state_dict(), last_model_path)
         print("the train is over,save the best model and the last model")
         
+        # --- MLflow Artifacts & End Run ---
+        # 记录图表作为产物
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'loss_curve.pdf'))
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
+        # 记录最佳模型
+        best_model_path = os.path.join(chechpoint_path, 'checkpoint.pth')
+        if os.path.exists(best_model_path):
+            mlflow.log_artifact(best_model_path, artifact_path="checkpoints")
+        # 结束MLflow运行
+        mlflow.end_run()
 
         return self.model
 

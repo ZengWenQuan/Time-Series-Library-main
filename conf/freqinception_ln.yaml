@@ -1,0 +1,71 @@
+
+# FreqInceptionLNet 模型配置文件
+# 改进版，支持在批量归一化(BN)和层归一化(LN)之间切换
+
+# ===============================================
+# 全局归一化设置 (Normalization Settings)
+# ===============================================
+normalization_settings:
+  # 归一化类型: 'bn' (BatchNorm) 或 'ln' (LayerNorm)
+  norm_type: 'ln'
+  
+  # --- LayerNorm 特定参数 ---
+  # 为数值稳定性添加的小值，防止除以零
+  layer_norm_eps: 1.0e-5
+  # 是否学习仿射参数(gamma和beta)。如果为True，LN层将有可学习的权重。
+  layer_norm_elementwise_affine: true
+
+# ===============================================
+# 任务与数据维度配置
+# ===============================================
+task_name: 'spectral_prediction'
+feature_size: 2000
+label_size: 4
+
+# ===============================================
+# 分支 1: 频率分支 (Frequency Branch)
+# ===============================================
+frequency_branch:
+  conv_layers:
+    - {out_channels: 16, kernel_size: 7, stride: 2, padding: 3}
+    - {out_channels: 32, kernel_size: 5, stride: 2, padding: 2}
+    - {out_channels: 64, kernel_size: 3, stride: 2, padding: 1}
+  mlp_output_dim: 256
+  dropout: 0.2
+
+# ===============================================
+# 分支 2: Inception分支 (Inception Branch)
+# ===============================================
+inception_branch:
+  blocks:
+    - out_channels_per_path: {3: 16, 5: 16, 7: 16}
+      channel_attention_reduction: 8
+      use_pooling: true
+      pool_size: 2
+    - out_channels_per_path: {3: 32, 5: 32, 9: 32}
+      channel_attention_reduction: 16
+      use_pooling: true
+      pool_size: 2
+    - out_channels_per_path: {3: 64, 5: 64, 11: 64}
+      channel_attention_reduction: 16
+      use_pooling: true
+      pool_size: 2
+    - out_channels_per_path: {3: 96, 5: 96}
+      channel_attention_reduction: 16
+      use_pooling: false
+      pool_size: 2
+
+# ===============================================
+# 特征融合、序列处理与预测头
+# ===============================================
+fusion_module:
+  dropout: 0.3
+
+sequence_module:
+  lstm_hidden_dim: 256
+  lstm_layers: 2
+  lstm_dropout: 0.2
+
+prediction_head:
+  hidden_dims: [512, 256]
+  dropout: 0.3

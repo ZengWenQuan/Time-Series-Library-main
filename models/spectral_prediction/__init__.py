@@ -5,3 +5,4 @@ from .DualPyramidNet import *
 from .TwoBranchTeffNet import *
 from .mspdownsample import *
 from .DualSpectralNet import *
+from .FreqInceptionLNet import *

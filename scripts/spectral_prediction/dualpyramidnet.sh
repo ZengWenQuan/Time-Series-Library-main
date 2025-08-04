@@ -15,7 +15,7 @@
     --batch_size 32 \
     --learning_rate 0.0001 \
     --train_epochs 10 \
-    --patience 3 \
+    --patience 30000 \
     --use_gpu True \
     --gpu 0 \
     --des 'DualPyramidNet_experiment'
