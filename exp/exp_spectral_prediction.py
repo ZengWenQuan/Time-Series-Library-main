@@ -209,7 +209,13 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
+
+        # Conditionally load test data only if the test ratio is greater than zero
+        if self.args.split_ratio[2] > 0:
+            test_data, test_loader = self._get_data(flag='test')
+        else:
+            self.logger.info("Test ratio is 0, skipping test set loading and evaluation.")
+            test_data, test_loader = None, None
 
         chechpoint_path=self.args.run_dir+'/'+'checkpoints'
         if not os.path.exists(chechpoint_path):
@@ -381,16 +387,18 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 mlflow.log_metric('val_loss', vali_loss, step=epoch)
             mlflow.log_metric('learning_rate', current_lr, step=epoch)
 
-            # Log MAE for each validation target
+            # Log MAE for each validation target, excluding the overall 'mae'
             if metrics_dict_vali:
                 for metric_name, metric_value in metrics_dict_vali.items():
-                    if 'mae' in metric_name.lower(): # Log overall MAE and per-label MAE
+                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
+                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
                         mlflow.log_metric(f'val_{metric_name}', metric_value, step=epoch)
             
-            # Log MAE for each test target
+            # Log MAE for each test target, excluding the overall 'mae'
             if test_data is not None and metrics_dict_test:
                 for metric_name, metric_value in metrics_dict_test.items():
-                    if 'mae' in metric_name.lower():
+                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
+                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
                         mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
 
             adjust_learning_rate(model_optim, epoch + 1, self.args)
