@@ -287,6 +287,14 @@ if __name__ == '__main__':
         # 创建时间戳目录
         run_dir = os.path.join(runs_dir, timestamp)
         os.makedirs(run_dir, exist_ok=True)
+
+        # 保存当前实验的模型配置文件
+        if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
+            try:
+                shutil.copy2(args.model_conf, run_dir)
+                print(f"Saved model config to {run_dir}")
+            except Exception as e:
+                print(f"Warning: Could not save model config file. Error: {e}")
         
         # 创建metrics目录
         metrics_dir = os.path.join(run_dir, "metrics")

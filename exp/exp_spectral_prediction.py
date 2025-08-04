@@ -313,14 +313,14 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
             log_message = (
                 f"Epoch: {epoch + 1}, Steps: {train_steps} | "
-                f"Train Loss: {train_loss:.7f} Vali Loss: {vali_loss:.7f} "
+                f"Train Loss: {train_loss:.4f} Vali Loss: {vali_loss:.4f} "
             )
             if test_data is not None:
-                log_message += f"Test Loss: {test_loss:.7f} "
+                log_message += f"Test Loss: {test_loss:.4f} "
             log_message += (
                 f"Vali Interval: {self.args.vali_interval},"
-                f"epoch_time: {time.time() - epoch_time }s  left_time: {left_time//3600:.2f}h{(left_time%3600)//60:.2f}m{left_time%60:.2f}s | "
-                f"lr:{current_lr} "
+                f"epoch_time: {time.time() - epoch_time :.2f }s  left_time: {left_time//3600:.2f}h{(left_time%3600)//60:.2f}m{left_time%60:.2f}s | "
+                f"lr:{current_lr:.2f} "
                 f"{grad_info}"
             )
             self.logger.info(log_message)
