@@ -407,15 +407,32 @@ class Exp_Spectral_Prediction(Exp_Basic):
         torch.save(self.model.state_dict(), last_model_path)
         print("the train is over,save the best model and the last model")
         
-        # --- MLflow Artifacts & End Run ---
-        # 记录图表作为产物
+        # --- MLflow Artifacts & Model Registration ---
+        self.logger.info("Logging artifacts and registering model to MLflow...")
+
+        # 1. Log plots as artifacts
         mlflow.log_artifact(os.path.join(self.args.run_dir, 'loss_curve.pdf'))
         mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
-        # 记录最佳模型
-        best_model_path = os.path.join(chechpoint_path, 'checkpoint.pth')
+
+        # 2. Register the best model to the MLflow Model Registry
+        # Note: EarlyStopping saves the best model as 'best.pth'
+        best_model_path = os.path.join(chechpoint_path, 'best.pth')
         if os.path.exists(best_model_path):
-            mlflow.log_artifact(best_model_path, artifact_path="checkpoints")
-        # 结束MLflow运行
+            self.logger.info(f"Registering model '{self.args.model}' from {best_model_path}")
+            # Load the best model's weights before registration
+            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+            
+            # Use mlflow.pytorch.log_model for registration
+            mlflow.pytorch.log_model(
+                pytorch_model=self.model,
+                artifact_path="model",  # Subdirectory within the run's artifacts
+                registered_model_name=self.args.model  # This is the key for registration
+            )
+            self.logger.info(f"Model '{self.args.model}' registered successfully.")
+        else:
+            self.logger.warning(f"Could not find best model at '{best_model_path}' to register.")
+
+        # 3. End the MLflow run
         mlflow.end_run()
 
         return self.model
