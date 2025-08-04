@@ -96,18 +96,32 @@ class Exp_Spectral_Prediction(Exp_Basic):
         model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
         return model_optim
   
-    def _setup_logger(self):        # Prevent the logger from propagating to the root logger 
+    def _setup_logger(self):
+        import datetime
+        # Prevent the logger from propagating to the root logger 
         self.logger = logging.getLogger('CEMP_search')        
         self.logger.setLevel(logging.INFO)   
-        self.logger.propagate = False        # Formatter        
-        formatter = logging.Formatter('CEMP search - %(message)s')        # File Handler        
+        self.logger.propagate = False
+        
+        # 获取当前北京时间
+        beijing_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+        time_str = beijing_time.strftime('%Y-%m-%d %H:%M')
+        
+        # Formatter        
+        formatter = logging.Formatter(f'CEMP search - {time_str} - %(message)s')
+        
+        # File Handler        
         log_file = os.path.join(self.args.run_dir, 'training.log')        
         file_handler = logging.FileHandler(log_file)        
         file_handler.setLevel(logging.INFO)        
-        file_handler.setFormatter(formatter)        # Stream Handler (for console output)        
+        file_handler.setFormatter(formatter)
+        
+        # Stream Handler (for console output)        
         stream_handler = logging.StreamHandler()        
         stream_handler.setLevel(logging.INFO)        
-        stream_handler.setFormatter(formatter)        # Add handlers to the logger        
+        stream_handler.setFormatter(formatter)
+        
+        # Add handlers to the logger        
         if not self.logger.handlers:            
             self.logger.addHandler(file_handler)            
             self.logger.addHandler(stream_handler)    
@@ -199,6 +213,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
         
         history_train_loss = []
         history_vali_loss = []
+        history_lr = []
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -288,6 +303,10 @@ class Exp_Spectral_Prediction(Exp_Basic):
             history_train_loss.append(train_loss)
             history_vali_loss.append(vali_loss)
 
+            # 在调整学习率前记录当前学习率
+            current_lr = model_optim.param_groups[0]['lr']
+            history_lr.append(current_lr)
+
             left_time = (self.args.train_epochs - epoch) *(time.time() - epoch_time)
             
             grad_info = f"Grad Norm: {grad_norm_before:.2f}->{grad_norm_after:.2f}"
@@ -301,6 +320,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
             log_message += (
                 f"Vali Interval: {self.args.vali_interval},"
                 f"epoch_time: {time.time() - epoch_time }s  left_time: {left_time//3600:.2f}h{(left_time%3600)//60:.2f}m{left_time%60:.2f}s | "
+                f"lr:{current_lr} "
                 f"{grad_info}"
             )
             self.logger.info(log_message)
@@ -342,7 +362,10 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 print("Early stopping")
                 break
 
-            self._plot_loss_curve(history_train_loss, history_vali_loss)
+            # 使用通用函数绘制损失和学习率曲线
+            self._plot_curve({'Train Loss': history_train_loss, 'Validation Loss': history_vali_loss}, 'Loss', 'Loss', 'loss')
+            self._plot_curve({'Learning Rate': history_lr}, 'Learning Rate', 'Learning Rate', 'lr')
+
             adjust_learning_rate(model_optim, epoch + 1, self.args)
             
         last_model_path = chechpoint_path + '/' + 'last.pth'
@@ -352,18 +375,19 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
         return self.model
 
-    def _plot_loss_curve(self, train_loss_history, vali_loss_history):
+    def _plot_curve(self, data_history, title, y_label, file_suffix):
+        """通用绘图函数，可绘制损失或学习率等曲线"""
         plt.figure(figsize=(10, 6))
-        plt.plot(train_loss_history, label='Train Loss')
-        plt.plot(vali_loss_history, label='Validation Loss')
-        plt.title('Training and Validation Loss Curve')
+        for label, values in data_history.items():
+            plt.plot(values, label=label)
+        
+        plt.title(f'Training and Validation {title}')
         plt.xlabel('Epoch')
-        plt.ylabel('Loss')
+        plt.ylabel(y_label)
         plt.legend()
         plt.grid(True)
-        save_path = os.path.join(self.args.run_dir, 'loss_curve.pdf')
+        save_path = os.path.join(self.args.run_dir, f'{file_suffix}_curve.pdf')
         plt.savefig(save_path, format='pdf')
-        self.logger.info(f"Loss curve saved to {save_path}")
         plt.close()
 
     def test(self, setting, test=0):

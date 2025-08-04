@@ -32,8 +32,8 @@ MODEL_ID="${MODEL_NAME}_$(date +%Y%m%d_%H%M%S)"
 # 数据路径配置
 ROOT_PATH="./dataset/spectral/"
 DATA_PATH="removed_with_rv.csv"
-SPECTRA_CONTINUUM_PATH="final_spectra_continuum_full.csv"
-SPECTRA_NORMALIZED_PATH="final_spectra_normalized_full.csv"
+SPECTRA_CONTINUUM_PATH="final_spectra_continuum.csv"
+SPECTRA_NORMALIZED_PATH="final_spectra_normalized.csv"
 LABEL_PATH="removed_with_rv.csv"
 
 # 模型配置
