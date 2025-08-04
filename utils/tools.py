@@ -21,7 +21,14 @@ def adjust_learning_rate(optimizer, epoch, args):
     elif args.lradj == 'type3':
         lr_adjust = {epoch: args.learning_rate if epoch < 3 else args.learning_rate * (0.9 ** ((epoch - 3) // 1))}
     elif args.lradj == "cosine":
-        lr_adjust = {epoch: args.learning_rate /2 * (1 + math.cos(epoch / args.train_epochs * math.pi))}
+        # 使用带重启的余弦退火调度器
+        # 注意：这个调度器应该在训练开始前初始化，并在每个epoch后调用scheduler.step()
+        # 为了保持当前函数结构，我们在这里模拟它的行为，但这并不是最高效的方式
+        T_0 = args.cosine_t0 if hasattr(args, 'cosine_t0') else args.train_epochs
+        T_cur = epoch % T_0
+        lr = args.learning_rate * (1 + math.cos(math.pi * T_cur / T_0)) / 2
+        lr_adjust = {epoch: lr}
+
     elif args.lradj == "warmup_cosine":
         # 预热阶段（前5个epoch）
         warmup_epochs = 5
