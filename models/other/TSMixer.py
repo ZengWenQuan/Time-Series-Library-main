@@ -1,4 +1,5 @@
 import torch.nn as nn
+from exp.exp_basic import register_model
 
 
 class ResBlock(nn.Module):
@@ -27,9 +28,10 @@ class ResBlock(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('TSMixer')
+class TSMixer(nn.Module):
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(TSMixer, self).__init__()
         self.task_name = configs.task_name
         self.layer = configs.e_layers
         self.model = nn.ModuleList([ResBlock(configs)

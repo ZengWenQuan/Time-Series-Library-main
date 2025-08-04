@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from exp.exp_basic import register_model
 
 
 class IEBlock(nn.Module):
@@ -36,7 +37,9 @@ class IEBlock(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('LightTS')
+@register_model('LightTS')
+class LightTS(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2207.01186
     """
@@ -45,7 +48,7 @@ class Model(nn.Module):
         """
         chunk_size: int, reshape T into [num_chunks, chunk_size]
         """
-        super(Model, self).__init__()
+        super(LightTS, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':

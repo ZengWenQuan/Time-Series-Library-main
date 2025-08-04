@@ -1,1 +1,0 @@
-from models.stellar_models.Inception1DModel import Model 

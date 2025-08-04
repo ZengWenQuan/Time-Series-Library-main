@@ -1,4 +1,6 @@
 import torch
+from layers.TimeXer_layers import TimeXer_backbone
+from exp.exp_basic import register_model
 import torch.nn as nn
 import torch.nn.functional as F
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
@@ -114,7 +116,7 @@ class EncoderLayer(nn.Module):
 class Model(nn.Module):
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(TimeXer, self).__init__()
         self.task_name = configs.task_name
         self.features = configs.features
         self.seq_len = configs.seq_len

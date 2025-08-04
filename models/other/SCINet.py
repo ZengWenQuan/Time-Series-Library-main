@@ -1,7 +1,10 @@
 import torch
+from layers.SCINet_layers import Encoder, Decoder
+from exp.exp_basic import register_model
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from exp.exp_basic import register_model
 
 class Splitting(nn.Module):
     def __init__(self):
@@ -59,7 +62,7 @@ class SCIBlock(nn.Module):
         return x_even_update.permute(0, 2, 1), x_odd_update.permute(0, 2, 1)
 
 
-class SCINet(nn.Module):
+class Model(nn.Module):
     def __init__(self, d_model, current_level=3, kernel_size=5, dropout=0.0):
         super(SCINet, self).__init__()
         self.current_level = current_level
@@ -101,7 +104,7 @@ class SCINet(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(SCINet, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len

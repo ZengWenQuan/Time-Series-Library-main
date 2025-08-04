@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pywt
+from exp.exp_basic import register_model
 
 class DWTFeature(nn.Module):
     """
@@ -40,14 +41,15 @@ class WaveletConvBlock(nn.Module):
         out = self.pool(out)
         return out
 
-class Model(nn.Module):
+@register_model('WaveletConvNet')
+class WaveletConvNet(nn.Module):
     """
     基于小波和多尺度卷积的恒星参数估计模型
     输入: (batch, seq_len)
     输出: (batch, 4)
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(WaveletConvNet, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
-from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
-from layers.SelfAttention_Family import DSAttention, AttentionLayer
+from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
+from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
+from exp.exp_basic import register_model
+import numpy as np
 import torch.nn.functional as F
+from exp.exp_basic import register_model
 
 
 class Projector(nn.Module):
@@ -38,14 +41,14 @@ class Projector(nn.Module):
 
         return y
 
-
-class Model(nn.Module):
+@register_model('Nonstationary_Transformer')
+class Nonstationary_Transformer(nn.Module):
     """
     Paper link: https://openreview.net/pdf?id=ucNDIDRNjjv
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(Nonstationary_Transformer, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len

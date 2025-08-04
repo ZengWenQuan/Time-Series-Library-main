@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from exp.exp_basic import register_model
 
 
 class SFFTFeatureExtractor(nn.Module):
@@ -143,28 +144,29 @@ class InceptionBranch(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('HybridModel')
+class HybridModel(nn.Module):
     """
     混合卷积和Inception模型，用于恒星参数估计
     """
-    def __init__(self, args):
-        super(Model, self).__init__()
-        self.task_name = args.task_name
-        self.feature_size = args.feature_size
-        self.label_size = args.label_size
+    def __init__(self, configs):
+        super(HybridModel, self).__init__()
+        self.task_name = configs.task_name
+        self.feature_size = configs.feature_size
+        self.label_size = configs.label_size
         
         # SFFT特征提取器
-        self.sfft = SFFTFeatureExtractor(args)
+        self.sfft = SFFTFeatureExtractor(configs)
         
         # 计算SFFT后的特征维度
-        n_fft = args.n_fft if hasattr(args, 'n_fft') else 128
-        hop_length = args.hop_length if hasattr(args, 'hop_length') else 32
+        n_fft = configs.n_fft if hasattr(configs, 'n_fft') else 128
+        hop_length = configs.hop_length if hasattr(configs, 'hop_length') else 32
         time_bins = (self.feature_size - n_fft) // hop_length + 1
         freq_bins = n_fft // 2 + 1
         
         # 双分支结构
-        self.conv_branch = ConvBranch(args)
-        self.inception_branch = InceptionBranch(args)
+        self.conv_branch = ConvBranch(configs)
+        self.inception_branch = InceptionBranch(configs)
         
         # 计算展平后的特征大小
         self.conv_output_size = self._calculate_output_size((1, freq_bins, time_bins), self.conv_branch)
@@ -172,8 +174,8 @@ class Model(nn.Module):
         
         # 全连接网络
         total_features = self.conv_output_size + self.inception_output_size
-        ffn_hidden_size = args.ffn_hidden_size if hasattr(args, 'ffn_hidden_size') else 64
-        dropout_rate = args.dropout_rate if hasattr(args, 'dropout_rate') else 0.3
+        ffn_hidden_size = configs.ffn_hidden_size if hasattr(configs, 'ffn_hidden_size') else 64
+        dropout_rate = configs.dropout_rate if hasattr(configs, 'dropout_rate') else 0.3
         
         self.ffn = nn.Sequential(
             nn.Linear(total_features, ffn_hidden_size),

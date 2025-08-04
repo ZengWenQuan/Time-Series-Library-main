@@ -4,16 +4,18 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding_inverted
+from exp.exp_basic import register_model
 import numpy as np
 
 
-class Model(nn.Module):
+@register_model('iTransformer')
+class iTransformer(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2310.06625
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(iTransformer, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

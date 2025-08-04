@@ -1,10 +1,13 @@
 import math
 import torch
+from layers.Koopa_layers import KoopaLayer
+from exp.exp_basic import register_model
 import torch.nn as nn
 from data_provider.data_factory import data_provider
 
+from exp.exp_basic import register_model
 
-
+@register_model('FourierFilter')
 class FourierFilter(nn.Module):
     """
     Fourier Filter: to time-variant and time-invariant term
@@ -234,7 +237,8 @@ class TimeInvKP(nn.Module):
         return res
 
 
-class Model(nn.Module):
+@register_model('Koopa')
+class Koopa(nn.Module):
     '''
     Paper link: https://arxiv.org/pdf/2305.18803.pdf
     '''
@@ -249,7 +253,7 @@ class Model(nn.Module):
         multistep: bool, whether to use approximation for multistep K
         alpha: float, spectrum filter ratio
         """
-        super(Model, self).__init__()
+        super(Koopa, self).__init__()
         self.task_name = configs.task_name
         self.enc_in = configs.enc_in
         self.input_len = configs.seq_len

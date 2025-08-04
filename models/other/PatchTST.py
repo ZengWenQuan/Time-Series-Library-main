@@ -3,6 +3,7 @@ from torch import nn
 from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PatchEmbedding
+from exp.exp_basic import register_model
 
 class Transpose(nn.Module):
     def __init__(self, *dims, contiguous=False): 
@@ -28,17 +29,14 @@ class FlattenHead(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('PatchTST')
+class PatchTST(nn.Module):
     """
     Paper link: https://arxiv.org/pdf/2211.14730.pdf
     """
 
     def __init__(self, configs, patch_len=16, stride=8):
-        """
-        patch_len: int, patch len for patch_embedding
-        stride: int, stride for patch_embedding
-        """
-        super().__init__()
+        super(PatchTST, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

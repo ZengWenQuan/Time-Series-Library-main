@@ -1,70 +1,39 @@
 import os
 import torch
-from models.other import Autoformer, Transformer, TimesNet, Nonstationary_Transformer, DLinear, FEDformer, \
-    Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer, \
-    Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN, MambaSimple, TemporalFusionTransformer, SCINet, PAttn, TimeXer, \
-    WPMixer, MultiPatchFormer
-from models.regression import PatchSpectralModel, Inception1DModel, InceptionStellar, WaveletConvNet, MPBDNet, SFFTDualBranchNet, hybrid_model, AttentionSpectrumNet
-from models.spectral_prediction import MLP ,MPBDNet_spetral
 import torch.nn as nn
 from utils.losses import RegressionFocalLoss
+
+# --- Model Registration Mechanism ---
+MODEL_REGISTRY = {}
+
+def register_model(name):
+    """A decorator to register a new model class."""
+    def decorator(cls):
+        if cls.__name__ in MODEL_REGISTRY:
+            raise ValueError(f'模型{cls.__name__} 已经存在了！不能重复注册')
+        MODEL_REGISTRY[cls.__name__] = cls
+        return cls
+    return decorator
+# --- End of Mechanism ---
 
 class Exp_Basic(object):
     def __init__(self, args):
         self.args = args
-        self.model_dict = {
-            'TimesNet': TimesNet,
-            'Autoformer': Autoformer,
-            'Transformer': Transformer,
-            'Nonstationary_Transformer': Nonstationary_Transformer,
-            'DLinear': DLinear,
-            'FEDformer': FEDformer,
-            'Informer': Informer,
-            'LightTS': LightTS,
-            'Reformer': Reformer,
-            'ETSformer': ETSformer,
-            'PatchTST': PatchTST,
-            'Pyraformer': Pyraformer,
-            'MICN': MICN,
-            'Crossformer': Crossformer,
-            'FiLM': FiLM,
-            'iTransformer': iTransformer,
-            'Koopa': Koopa,
-            'TiDE': TiDE,
-            'FreTS': FreTS,
-            'MambaSimple': MambaSimple,
-            'TimeMixer': TimeMixer,
-            'TSMixer': TSMixer,
-            'SegRNN': SegRNN,
-            'TemporalFusionTransformer': TemporalFusionTransformer,
-            "SCINet": SCINet,
-            'PAttn': PAttn,
-            'TimeXer': TimeXer,
-            'WPMixer': WPMixer,
-            'MultiPatchFormer': MultiPatchFormer,
-            'PatchSpectralModel': PatchSpectralModel,
-            'Inception1DModel': Inception1DModel,
-            'InceptionStellar': InceptionStellar,
-            'WaveletConvNet': WaveletConvNet,
-            'MPBDNet': MPBDNet,
-            'SFFTDualBranchNet': SFFTDualBranchNet,
-            'HybridModel': hybrid_model,
-            'AttentionSpectrumNet': AttentionSpectrumNet,
-            'MLP':MLP,
-            'MPBDNet_spetral':MPBDNet_spetral
-        }
-        if args.model == 'Mamba':
-            print('Please make sure you have successfully installed mamba_ssm')
-            from models import Mamba
-            self.model_dict['Mamba'] = Mamba
-
         self.device = self._acquire_device()
         self.model = self._build_model().to(self.device)
 
-
     def _build_model(self):
-        raise NotImplementedError
-        return None
+        model_class = MODEL_REGISTRY.get(self.args.model)
+        if model_class is None:
+            raise ValueError(f"Model '{self.args.model}' is not registered. "
+                             f"Available models: {list(MODEL_REGISTRY.keys())}")
+        
+        print(f"Building model: {self.args.model}")
+        model = model_class(self.args).float()
+
+        if self.args.use_multi_gpu and self.args.use_gpu:
+            model = nn.DataParallel(model, device_ids=self.args.device_ids)
+        return model
 
     def _acquire_device(self):
         if self.args.use_gpu and self.args.gpu_type == 'cuda':

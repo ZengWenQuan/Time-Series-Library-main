@@ -5,6 +5,7 @@ from layers.Embed import DataEmbedding, TemporalEmbedding
 from torch import Tensor
 from typing import Optional
 from collections import namedtuple
+from exp.exp_basic import register_model
 
 # static: time-independent features
 # observed: time features of the past(e.g. predicted targets)
@@ -251,9 +252,10 @@ class TemporalFusionDecoder(nn.Module):
         return self.out_projection(out)
 
 
-class Model(nn.Module):
+@register_model('TemporalFusionTransformer')
+class TemporalFusionTransformer(nn.Module):
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(TemporalFusionTransformer, self).__init__()
         self.configs = configs
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len

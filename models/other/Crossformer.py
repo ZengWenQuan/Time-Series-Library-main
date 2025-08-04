@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from layers.Crossformer_EncDec import scale_block, Encoder, Decoder, DecoderLayer
 from layers.Embed import PatchEmbedding
+from exp.exp_basic import register_model
 from layers.SelfAttention_Family import AttentionLayer, FullAttention, TwoStageAttentionLayer
 from models.other.PatchTST import FlattenHead
 
@@ -11,12 +12,13 @@ from models.other.PatchTST import FlattenHead
 from math import ceil
 
 
-class Model(nn.Module):
+@register_model('Crossformer')
+class Crossformer(nn.Module):
     """
     Paper link: https://openreview.net/pdf?id=vSVLM2j9eie
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(Crossformer, self).__init__()
         self.enc_in = configs.enc_in
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

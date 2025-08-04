@@ -3,17 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from layers.Autoformer_EncDec import series_decomp
 
-
-class Model(nn.Module):
+from exp.exp_basic import register_model
+@register_model('DLinear')
+class DLinear(nn.Module):
     """
     Paper link: https://arxiv.org/pdf/2205.13504.pdf
     """
 
-    def __init__(self, configs, individual=False):
-        """
-        individual: Bool, whether shared model among different variates.
-        """
-        super(Model, self).__init__()
+    def __init__(self, configs):
+        super(DLinear, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':

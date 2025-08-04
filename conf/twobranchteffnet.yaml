@@ -1,0 +1,31 @@
+# Configuration for the TwoBranchTeffNet Model
+
+# --- Shared Spectral Encoder (CNN + Transformer) ---
+# This encoder is used by both branches to process spectral data.
+
+# 1D Convolutional Patching Layer
+patch_conv:
+  out_channels: 128  # Dimension of each "patch" feature vector
+  kernel_size: 32
+  stride: 16
+
+# Transformer Encoder
+transformer:
+  d_model: 128         # Must match patch_conv.out_channels
+  n_heads: 8           # Number of attention heads
+  num_layers: 4        # Number of transformer encoder layers
+  ffn_dim: 512         # Dimension of the feed-forward network in the transformer
+  dropout: 0.2         # Dropout rate within the transformer
+
+# --- Branch 2 Specifics ---
+
+# Cross-Attention Mechanism for conditioning on Teff
+cross_attention:
+  n_heads: 4           # Can be different from the main transformer
+
+# --- Final Prediction Heads (MLPs) ---
+
+# MLP head for the final prediction of the other 3 parameters
+final_head_mlp:
+  hidden_dims: [256, 128]
+  dropout: 0.3

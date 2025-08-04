@@ -4,6 +4,7 @@ from layers.Embed import DataEmbedding
 from layers.Autoformer_EncDec import series_decomp, series_decomp_multi
 import torch.nn.functional as F
 
+from exp.exp_basic import register_model
 
 class MIC(nn.Module):
     """
@@ -105,15 +106,17 @@ class SeasonalPrediction(nn.Module):
         return self.projection(dec)
 
 
-class Model(nn.Module):
+@register_model('MICN')
+class MICN(nn.Module):
     """
     Paper link: https://openreview.net/pdf?id=zt53IDUR1U
     """
-    def __init__(self, configs, conv_kernel=[12, 16]):
+    def __init__(self, configs):
+        super(MICN, self).__init__()
         """
         conv_kernel: downsampling and upsampling convolution kernel_size
         """
-        super(Model, self).__init__()
+        super(MICN, self).__init__()
 
         decomp_kernel = []  # kernel of decomposition operation
         isometric_kernel = []  # kernel of isometric convolution

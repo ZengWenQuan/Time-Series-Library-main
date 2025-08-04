@@ -1,0 +1,97 @@
+# FreqInceptionNet 模型配置文件 (重构版)
+# 具备更高的可配置性，并遵循项目代码风格
+
+# ===============================================
+# 全局设置 (Global Settings)
+# ===============================================
+global_settings:
+  # 统一控制模型中所有BatchNorm1d层是否启用
+  use_batch_norm: true
+
+# ===============================================
+# 任务与数据维度配置
+# ===============================================
+# 任务名称，必须与脚本和模型内部逻辑匹配
+task_name: 'spectral_prediction'
+
+# 输入特征维度 (每个分支的输入维度)
+# 例如，如果总输入是4000，连续谱和吸收线各2000，则这里是2000
+feature_size: 2000
+
+# 预测标签的数量
+label_size: 4 # 例如: Teff, logg, FeH, CFe
+
+# ===============================================
+# 分支 1: 频率分支 (Frequency Branch)
+# 分析连续谱的频域特征，先通过CNN下采样，再通过MLP
+# ===============================================
+frequency_branch:
+  # CNN下采样层配置
+  conv_layers:
+    # - {out_channels: 16, kernel_size: 7, stride: 2, padding: 3}
+    # - {out_channels: 32, kernel_size: 5, stride: 2, padding: 2}
+    # - {out_channels: 64, kernel_size: 3, stride: 2, padding: 1}
+    - out_channels: 16
+      kernel_size: 7
+      stride: 2
+      padding: 3
+    - out_channels: 32
+      kernel_size: 5
+      stride: 2
+      padding: 2
+    - out_channels: 64
+      kernel_size: 3
+      stride: 2
+      padding: 1
+
+  # MLP处理后输出的特征维度
+  mlp_output_dim: 256
+  # MLP中的Dropout率
+  dropout: 0.2
+
+# ===============================================
+# 分支 2: Inception分支 (Inception Branch)
+# 使用多尺度卷积和通道注意力机制分析吸收线
+# ===============================================
+inception_branch:
+  blocks:
+    - out_channels_per_path: {3: 16, 5: 16, 7: 16}
+      channel_attention_reduction: 8
+      use_pooling: true
+      pool_size: 2
+
+    - out_channels_per_path: {3: 32, 5: 32, 9: 32}
+      channel_attention_reduction: 16
+      use_pooling: true
+      pool_size: 2
+
+    - out_channels_per_path: {3: 64, 5: 64, 11: 64}
+      channel_attention_reduction: 16
+      use_pooling: true
+      pool_size: 2
+
+    - out_channels_per_path: {3: 96, 5: 96}
+      channel_attention_reduction: 16
+      use_pooling: false
+      pool_size: 2 # 保留字段以保持结构一致
+
+# ===============================================
+# 特征融合模块 (Fusion Module)
+# ===============================================
+fusion_module:
+  dropout: 0.3
+
+# ===============================================
+# 序列处理模块 (Sequence Module)
+# ===============================================
+sequence_module:
+  lstm_hidden_dim: 256
+  lstm_layers: 2
+  lstm_dropout: 0.2 # 仅在lstm_layers > 1时生效
+
+# ===============================================
+# 预测头 (Prediction Head)
+# ===============================================
+prediction_head:
+  hidden_dims: [512, 256]
+  dropout: 0.3

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import math
+from exp.exp_basic import register_model
 
 
 class Inception1DBlock(nn.Module):
@@ -115,12 +116,13 @@ class SqueezeExcitation(nn.Module):
         return x * y
 
 
-class Model(nn.Module):
+@register_model('Inception1DModel')
+class Inception1DModel(nn.Module):
     """
     基于Inception1D的恒星光谱数据分析模型
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(Inception1DModel, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.feature_size
         self.pred_len = configs.label_size

@@ -4,16 +4,18 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import ProbAttention, AttentionLayer
 from layers.Embed import DataEmbedding
+from exp.exp_basic import register_model
 
 
-class Model(nn.Module):
+@register_model('Informer')
+class Informer(nn.Module):
     """
     Informer with Propspare attention in O(LlogL) complexity
     Paper link: https://ojs.aaai.org/index.php/AAAI/article/view/17325/17132
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(Informer, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.label_len = configs.label_len

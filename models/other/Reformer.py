@@ -6,18 +6,15 @@ from layers.SelfAttention_Family import ReformerLayer
 from layers.Embed import DataEmbedding
 
 
-class Model(nn.Module):
+@register_model('Reformer')
+class Reformer(nn.Module):
     """
     Reformer with O(LlogL) complexity
     Paper link: https://openreview.net/forum?id=rkgNKkHtvB
     """
 
-    def __init__(self, configs, bucket_size=4, n_hashes=4):
-        """
-        bucket_size: int, 
-        n_hashes: int, 
-        """
-        super(Model, self).__init__()
+    def __init__(self, configs):
+        super(Reformer, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len

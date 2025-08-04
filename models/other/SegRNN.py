@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from layers.Autoformer_EncDec import series_decomp
+from exp.exp_basic import register_model
 
 
-class Model(nn.Module):
+@register_model('SegRNN')
+class SegRNN(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2308.11200.pdf
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(SegRNN, self).__init__()
 
         # get parameters
         self.seq_len = configs.seq_len

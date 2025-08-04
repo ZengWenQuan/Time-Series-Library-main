@@ -39,12 +39,13 @@ class ResBlock(nn.Module):
 
 
 #TiDE
-class Model(nn.Module):  
+@register_model('TiDE')
+class TiDE(nn.Module):  
     """
     paper: https://arxiv.org/pdf/2304.08424.pdf 
     """
-    def __init__(self, configs, bias=True, feature_encode_dim=2): 
-        super(Model, self).__init__()
+    def __init__(self, configs, feature_encode_dim=1, bias=True):
+        super(TiDE, self).__init__()
         self.configs = configs
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len  #L 

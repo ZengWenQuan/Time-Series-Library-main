@@ -12,6 +12,7 @@ import datetime
 import sys
 import shutil
 import ast
+import random
 
 from exp.exp_long_term_forecasting import Exp_Long_Term_Forecast
 from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
@@ -20,9 +21,25 @@ from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
 from exp.exp_regression import Exp_Regression
 from exp.exp_spectral_prediction import Exp_Spectral_Prediction
+from exp.exp_dualpyramidnet import Exp_DualPyramidNet
+from exp.exp_dualspectralnet import Exp_DualSpectralNet
 from utils.print_args import print_args
 
 warnings.filterwarnings('ignore')
+
+def fix_seed(seed):
+    """
+    设置随机种子以确保实验可重复性
+    """
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    print(f"Random seed set to: {seed}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Time Series Library')
@@ -67,7 +84,7 @@ if __name__ == '__main__':
     # regression task
     parser.add_argument('--apply_inverse_transform', type=int, default=0, help='whether to apply inverse transform on the output')
     parser.add_argument('--label_scaler_type', type=str, default='standard', help='scaler type for label')
-    parser.add_argument('--split_ratio', type=str, default='[0.7, 0.1, 0.2]', help='train/val/test split ratio')
+    parser.add_argument('--split_ratio', type=str, default='[0.8, 0.1, 0.1]', help='train/val/test split ratio')
     parser.add_argument('--targets', type=str, default="['Teff', 'logg', 'FeH', 'CFe']", help='target columns for regression')
     parser.add_argument('--features_scaler_type', type=str, default='standard', help='scaler type for features')
     
@@ -130,7 +147,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
-    parser.add_argument('--max_grad_norm', type=float, default=1.0, help='max norm of the gradients')
+    parser.add_argument('--max_grad_norm', type=float, default=20.0, help='max norm of the gradients')
     parser.add_argument('--des', type=str, default='test', help='exp description')
     parser.add_argument('--loss', type=str, default='mse', help='loss function')
     parser.add_argument('--loss_threshold', type=float, default=100000.0, help='threshold for skipping batches with abnormally high loss')
@@ -197,13 +214,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
+    # 设置随机种子
+    fix_seed(args.seed)
+    
     # 解析字符串形式的列表参数
     if hasattr(args, 'split_ratio') and isinstance(args.split_ratio, str):
         try:
             args.split_ratio = ast.literal_eval(args.split_ratio)
         except (ValueError, SyntaxError):
-            print("警告: split_ratio 参数格式错误，使用默认值 [0.7, 0.1, 0.2]")
-            args.split_ratio = [0.7, 0.1, 0.2]
+            print("警告: split_ratio 参数格式错误，使用默认值 [0.8, 0.1, 0.1]")
+            args.split_ratio = [0.8, 0.1, 0.1]
     
     if hasattr(args, 'targets') and isinstance(args.targets, str):
         try:
@@ -244,7 +264,12 @@ if __name__ == '__main__':
     elif args.task_name == 'regression':
         Exp = Exp_Regression
     elif args.task_name == 'spectral_prediction':
-        Exp = Exp_Spectral_Prediction
+        if args.model == 'DualPyramidNet':
+            Exp = Exp_DualPyramidNet
+        elif args.model == 'DualSpectralNet':
+            Exp = Exp_DualSpectralNet
+        else:
+            Exp = Exp_Spectral_Prediction
     else:
         Exp = Exp_Long_Term_Forecast
 

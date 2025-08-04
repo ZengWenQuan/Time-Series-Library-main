@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
+from exp.exp_basic import register_model
 from layers.Embed import DataEmbedding
 from layers.Conv_Blocks import Inception_Block_V1
 
@@ -68,13 +69,14 @@ class TimesBlock(nn.Module):
         return res
 
 
-class Model(nn.Module):
+@register_model('TimesNet')
+class TimesNet(nn.Module):
     """
     Paper link: https://openreview.net/pdf?id=ju_Uqw384Oq
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(TimesNet, self).__init__()
         self.configs = configs
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len

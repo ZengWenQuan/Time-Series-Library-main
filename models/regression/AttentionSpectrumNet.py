@@ -95,27 +95,28 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, :x.size(1)]
 
 
-class Model(nn.Module):
+@register_model('AttentionSpectrumNet')
+class AttentionSpectrumNet(nn.Module):
     """
     AttentionSpectrumNet模型，结合了卷积网络和注意力机制，
     专为恒星光谱数据分析设计
     """
-    def __init__(self, args):
-        super(Model, self).__init__()
-        self.task_name = args.task_name
-        self.feature_size = args.feature_size  # 光谱长度
-        self.label_size = args.label_size      # 输出标签数量
+    def __init__(self, configs):
+        super(AttentionSpectrumNet, self).__init__()
+        self.task_name = configs.task_name
+        self.feature_size = configs.feature_size  # 光谱长度
+        self.label_size = configs.label_size      # 输出标签数量
         
         # 模型配置
-        self.embed_dim = args.embed_dim if hasattr(args, 'embed_dim') else 128
-        self.num_heads = args.num_heads if hasattr(args, 'num_heads') else 4
-        self.num_layers = args.num_layers if hasattr(args, 'num_layers') else 3
-        self.conv_channels = args.conv_channels if hasattr(args, 'conv_channels') else [32, 64, 128]
-        self.kernel_sizes = args.kernel_sizes if hasattr(args, 'kernel_sizes') else [3, 5, 7]
-        self.patch_size = args.patch_size if hasattr(args, 'patch_size') else 64
-        self.stride = args.stride if hasattr(args, 'stride') else 48  # 允许重叠
-        self.dropout = args.dropout_rate if hasattr(args, 'dropout_rate') else 0.2
-        self.reduction_factor = args.reduction_factor if hasattr(args, 'reduction_factor') else 4  # 特征降维因子
+        self.embed_dim = configs.embed_dim if hasattr(configs, 'embed_dim') else 128
+        self.num_heads = configs.num_heads if hasattr(configs, 'num_heads') else 4
+        self.num_layers = configs.num_layers if hasattr(configs, 'num_layers') else 3
+        self.conv_channels = configs.conv_channels if hasattr(configs, 'conv_channels') else [32, 64, 128]
+        self.kernel_sizes = configs.kernel_sizes if hasattr(configs, 'kernel_sizes') else [3, 5, 7]
+        self.patch_size = configs.patch_size if hasattr(configs, 'patch_size') else 64
+        self.stride = configs.stride if hasattr(configs, 'stride') else 48  # 允许重叠
+        self.dropout = configs.dropout_rate if hasattr(configs, 'dropout_rate') else 0.2
+        self.reduction_factor = configs.reduction_factor if hasattr(configs, 'reduction_factor') else 4  # 特征降维因子
         
         # 特征提取阶段 - 卷积层
         self.conv_blocks = nn.ModuleList()

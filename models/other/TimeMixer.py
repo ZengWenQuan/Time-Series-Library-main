@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from layers.Autoformer_EncDec import series_decomp
 from layers.Embed import DataEmbedding_wo_pos
 from layers.StandardNorm import Normalize
+from exp.exp_basic import register_model
 
 
 class DFT_series_decomp(nn.Module):
@@ -184,10 +185,11 @@ class PastDecomposableMixing(nn.Module):
         return out_list
 
 
-class Model(nn.Module):
+@register_model('TimeMixer')
+class TimeMixer(nn.Module):
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(TimeMixer, self).__init__()
         self.configs = configs
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len

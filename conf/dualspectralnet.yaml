@@ -1,0 +1,162 @@
+# DualSpectralNet 模型配置文件
+# 双分支光谱预测网络：连续谱分支 + 吸收线分支 + 特征融合
+
+# ===============================================
+# 全局模型配置
+# ===============================================
+# 批量标准化和正则化设置
+use_batch_norm: false            # 是否使用BatchNorm1d（改为true提高数值稳定性）
+dropout_rate: 0.1               # 全局Dropout率（降低到0.1避免过度正则化）
+
+# 权重初始化方法
+initialization_method: "kaiming"  # 可选: "kaiming", "xavier"
+
+# 混合精度训练
+mixed_precision: false          # 是否启用混合精度训练
+
+# ===============================================
+# 连续谱分支配置（CNN + Transformer）
+# 用于提取光谱的全局特征和长期依赖关系
+# ===============================================
+continuum_branch:
+  # CNN特征提取层配置
+  cnn:
+    layers:
+      # 第一层：大感受野初步特征提取
+      - out_channels: 32
+        kernel_size: 15
+        stride: 1
+        padding: 7
+      # 第二层：中等感受野特征精炼  
+      - out_channels: 64
+        kernel_size: 9
+        stride: 2
+        padding: 4
+      # 第三层：小感受野精细特征
+      - out_channels: 128
+        kernel_size: 5
+        stride: 2
+        padding: 2
+  
+  # Transformer编码器配置
+  transformer:
+    d_model: 128        # 模型维度
+    n_heads: 8          # 注意力头数
+    num_layers: 4       # Transformer层数
+    ffn_dim: 512        # 前馈网络维度
+    dropout: 0.1        # Transformer内部Dropout
+
+# ===============================================
+# 吸收线分支配置（多尺度CNN）
+# 用于提取光谱的局部特征和精细结构
+# ===============================================
+absorption_branch:
+  blocks:
+    # 第一个多尺度块：保持高分辨率
+    - out_channels: 16
+      kernel_sizes: [3, 5, 7]     # 多尺度卷积核
+      use_attention: false
+      downsample: false
+    
+    # 第二个多尺度块：轻微下采样
+    - out_channels: 32
+      kernel_sizes: [3, 5, 7, 9]
+      use_attention: true
+      downsample: true
+      pool_size: 2
+      pool_stride: 2
+    
+    # 第三个多尺度块：进一步特征抽象
+    - out_channels: 64
+      kernel_sizes: [3, 5, 7]
+      use_attention: true
+      downsample: true
+      pool_size: 2
+      pool_stride: 2
+    
+    # 第四个多尺度块：高级特征提取
+    - out_channels: 96
+      kernel_sizes: [3, 5]
+      use_attention: true
+      downsample: true
+      pool_size: 2
+      pool_stride: 2
+    
+    # 第五个多尺度块：最终特征抽象
+    - out_channels: 128
+      kernel_sizes: [3, 5]
+      use_attention: true
+      downsample: false
+
+# ===============================================
+# 特征融合模块配置
+# 使用交叉注意力机制融合两个分支的特征
+# ===============================================
+fusion:
+  hidden_dim: 256        # 融合特征维度
+  num_heads: 8           # 交叉注意力头数
+
+# ===============================================
+# 预测头配置
+# 最终的全连接层用于参数预测
+# ===============================================
+prediction_head:
+  hidden_dims: [512, 256, 128]   # 隐藏层维度序列
+
+# ===============================================
+# 训练相关超参数
+# ===============================================
+training:
+  # 学习率调度
+  learning_rate: 0.00005          # 降低学习率，提高数值稳定性
+  lr_scheduler: "cosine"
+  warmup_epochs: 10
+  
+  # 正则化
+  weight_decay: 1e-4
+  gradient_clip: 0.5              # 降低梯度裁剪阈值，防止梯度爆炸
+  
+  # 数值稳定性设置
+  max_norm_threshold: 50.0        # 最大范数阈值
+  nan_detection: true             # 启用NaN检测
+  
+  # 混合精度训练
+  amp_enabled: false              # 彻底关闭混合精度
+  amp_init_scale: 65536.0
+  amp_growth_factor: 2.0
+  amp_backoff_factor: 0.5
+  amp_growth_interval: 2000
+  
+  # 批次大小建议
+  batch_size: 16                  # 减小批次大小，降低内存压力
+  
+  # 早停机制
+  patience: 15
+  min_delta: 1e-6
+
+# ===============================================
+# 高级配置选项
+# ===============================================
+advanced:
+  # 数据增强（如果需要）
+  data_augmentation:
+    noise_level: 0.01
+    shift_range: 0.02
+  
+  # 模型集成（如果需要）
+  ensemble:
+    num_models: 3
+    voting_strategy: "soft"
+    
+# ===============================================
+# 模型输出说明
+# ===============================================
+# 输出维度：4（对应Teff, logg, FeH, CFe四个恒星参数）
+# 
+# 模型架构特点：
+# 1. 连续谱分支专注于全局特征，使用Transformer捕获长距离依赖
+# 2. 吸收线分支专注于局部特征，使用多尺度CNN捕获不同尺度的吸收线特征
+# 3. 交叉注意力融合模块实现两个分支的信息交互
+# 4. 渐进式下采样避免信息丢失
+# 5. 注意力机制增强重要特征
+# ===============================================

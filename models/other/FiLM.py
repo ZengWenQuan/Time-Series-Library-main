@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from scipy import signal
 from scipy import special as ss
+from exp.exp_basic import register_model
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -88,12 +89,13 @@ class SpectralConv1d(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('FiLM')
+class FiLM(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2205.08897
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(FiLM, self).__init__()
         self.task_name = configs.task_name
         self.configs = configs
         self.seq_len = configs.seq_len

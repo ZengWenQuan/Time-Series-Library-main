@@ -11,8 +11,8 @@ python -u run.py \
   --label_path removed_with_rv.csv \
   --stats_path conf/stats.yaml \
   \
-  --model_id MPBDNet_spectral \
-  --model MPBDNet_spetral \
+  --model_id SpectralMPBDNet_spectral \
+  --model SpectralMPBDNet \
   --model_conf conf/mpbdnet.yaml \
   \
   --data spectral \

@@ -7,6 +7,8 @@ mmurad@usf.edu
 https://github.com/Secure-and-Intelligent-Systems-Lab/WPMixer
 """
 
+from layers.WPMixer_layers import WPMixer_backbone
+from exp.exp_basic import register_model
 import torch.nn as nn
 import torch
 from layers.DWT_Decomposition import Decomposition
@@ -269,9 +271,10 @@ class WPMixerCore(nn.Module):
         return xT
 
 
-class Model(nn.Module):
+@register_model('WPMixer')
+class WPMixer(nn.Module):
     def __init__(self, args, tfactor=5, dfactor=5, wavelet='db2', level=1, stride=8, no_decomposition=False):
-        super(Model, self).__init__()
+        super(WPMixer, self).__init__()
         self.args = args
         self.task_name = args.task_name
         self.wpmixerCore = WPMixerCore(input_length=self.args.seq_len,

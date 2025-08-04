@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from exp.exp_basic import register_model
 
 
-class Model(nn.Module):
+@register_model('FreTS')
+class FreTS(nn.Module):
     """
     Paper link: https://arxiv.org/pdf/2311.06184.pdf
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(FreTS, self).__init__()
         self.task_name = configs.task_name
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len

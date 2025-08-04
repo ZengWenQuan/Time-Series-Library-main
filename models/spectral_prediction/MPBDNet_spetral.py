@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.init as init
 import yaml
 
+from exp.exp_basic import register_model
 class MPBDBlock(nn.Module):
     """
     Multi-Path Block with Dual branches
@@ -38,13 +39,14 @@ class MPBDBlock(nn.Module):
     def forward(self, x):
         return self.Block1(x) + self.Block2(x) + self.downsample(x)
 
-class Model(nn.Module):
+@register_model('MPBDNet_spetral')
+class MPBDNet_spetral(nn.Module):
     """
     Multi-Path Block with Dual branches Network, adapted for spectral prediction.
     Configurable via a YAML file.
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(MPBDNet_spetral, self).__init__()
         
         # Load model-specific configuration
         if not hasattr(configs, 'model_conf') or not configs.model_conf:

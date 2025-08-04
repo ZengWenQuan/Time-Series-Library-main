@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from layers.Embed import DataEmbedding
-from layers.AutoCorrelation import AutoCorrelationLayer
+from layers.AutoCorrelation import AutoCorrelation, AutoCorrelationLayer
 from layers.FourierCorrelation import FourierBlock, FourierCrossAttention
 from layers.MultiWaveletCorrelation import MultiWaveletCross, MultiWaveletTransform
+from exp.exp_basic import register_model
 from layers.Autoformer_EncDec import Encoder, Decoder, EncoderLayer, DecoderLayer, my_Layernorm, series_decomp
 
-
-class Model(nn.Module):
+@register_model('FEDformer')
+class FEDformer(nn.Module):
     """
     FEDformer performs the attention mechanism on frequency domain and achieved O(N) complexity
     Paper link: https://proceedings.mlr.press/v162/zhou22g.html
@@ -20,7 +21,7 @@ class Model(nn.Module):
         mode_select: str, for FEDformer, there are two mode selection method, options: [random, low].
         modes: int, modes to be selected.
         """
-        super(Model, self).__init__()
+        super(FEDformer, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len

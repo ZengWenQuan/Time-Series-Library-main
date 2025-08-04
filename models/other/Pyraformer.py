@@ -1,9 +1,12 @@
 import torch
+from layers.Embed import DataEmbedding
+from layers.Pyraformer_EncDec import Encoder, Decoder
+from exp.exp_basic import register_model
 import torch.nn as nn
-from layers.Pyraformer_EncDec import Encoder
 
 
-class Model(nn.Module):
+@register_model('Pyraformer')
+class Pyraformer(nn.Module):
     """ 
     Pyraformer: Pyramidal attention to reduce complexity
     Paper link: https://openreview.net/pdf?id=0EXmFzUn5I
@@ -14,7 +17,7 @@ class Model(nn.Module):
         window_size: list, the downsample window size in pyramidal attention.
         inner_size: int, the size of neighbour attention
         """
-        super().__init__()
+        super(Pyraformer, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.d_model = configs.d_model

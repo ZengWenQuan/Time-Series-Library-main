@@ -1,7 +1,10 @@
 import torch
+from layers.MultiPatchFormer_layers import MultiPatchFormer_backbone
+from exp.exp_basic import register_model
 import torch.nn as nn
 import math
 from einops import rearrange
+from exp.exp_basic import register_model
 
 from layers.SelfAttention_Family import AttentionLayer, FullAttention
 
@@ -73,7 +76,7 @@ class Encoder(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(MultiPatchFormer, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

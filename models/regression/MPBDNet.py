@@ -133,7 +133,8 @@ class Embedding(nn.Module):
         x = x.permute(0, 2, 1)  # Change from [B, C, L] to [B, L, C]
         return x
 
-class Model(nn.Module):
+@register_model('MPBDNet')
+class MPBDNet(nn.Module):
     """
     Multi-Path Block with Dual branches Network
     
@@ -155,7 +156,7 @@ class Model(nn.Module):
                  seq_len=64,
                  dropout_rate=0.3,
                  batch_norm=False):
-        super(Model, self).__init__()
+        super(MPBDNet, self).__init__()
         
         # Validate and store parameters
         assert len(list_inplanes) < 6, "Too many block layers"

@@ -3,6 +3,16 @@ from data_provider.data_loader_spectral import Dataset_Spectral
 from data_provider.steller import  Dataset_Stellar
 from data_provider.uea import collate_fn
 from torch.utils.data import DataLoader
+import numpy as np
+import random
+import torch
+
+def fix_seed_worker(worker_id):
+    """
+    为DataLoader的每个worker设置随机种子
+    """
+    np.random.seed(torch.initial_seed() % 2**32)
+    random.seed(torch.initial_seed() % 2**32)
 
 data_dict = {
     'ETTh1': Dataset_ETT_hour,
@@ -91,7 +101,8 @@ def data_provider(args, flag, label_scaler=None, feature_scaler=None):
             batch_size=batch_size,
             shuffle=shuffle_flag,
             num_workers=args.num_workers,
-            drop_last=drop_last
+            drop_last=drop_last,
+            worker_init_fn=fix_seed_worker
         )
         return data_set, data_loader
     else:

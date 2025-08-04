@@ -1,16 +1,20 @@
 import torch
+from layers.PAttn_layers import PAttn_backbone
+from exp.exp_basic import register_model
 import torch.nn as nn
 from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from einops import rearrange
+from exp.exp_basic import register_model
 
 
-class Model(nn.Module):
+@register_model('PAttn')
+class PAttn(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2406.16964
     """
     def __init__(self, configs, patch_len=16, stride=8):
-        super().__init__()
+        super(PAttn, self).__init__()
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.patch_size = patch_len 

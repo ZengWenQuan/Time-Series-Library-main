@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import math
+from exp.exp_basic import register_model
 
 
 class SFFTFeatureExtractor(nn.Module):
@@ -151,13 +152,14 @@ class FFN(nn.Module):
         return self.ffn(x)
 
 
-class Model(nn.Module):
+@register_model('SFFTDualBranchNet')
+class SFFTDualBranchNet(nn.Module):
     """
     SFFT双分支网络模型
     包含SFFT特征提取、全卷积分支、Inception分支和FFN输出
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(SFFTDualBranchNet, self).__init__()
         self.task_name = configs.task_name
         self.feature_size = configs.feature_size
         self.label_size = configs.label_size

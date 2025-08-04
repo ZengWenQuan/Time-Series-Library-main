@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import math
+from exp.exp_basic import register_model
 
 
 class InceptionBlock(nn.Module):
@@ -138,12 +139,13 @@ class PatchProcessor(nn.Module):
         return x
 
 
-class Model(nn.Module):
+@register_model('PatchSpectralModel')
+class PatchSpectralModel(nn.Module):
     """
     用于恒星光谱数据的新模型，实现基于patch的处理和inception网络
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(PatchSpectralModel, self).__init__()
         self.seq_len = configs.seq_len
         self.patch_size = 64
         self.overlap = 18

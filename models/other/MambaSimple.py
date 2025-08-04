@@ -1,6 +1,9 @@
 import math
 
 import torch
+from mamba_ssm import Mamba
+from layers.Embed import DataEmbedding
+from exp.exp_basic import register_model
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, repeat, einsum
@@ -8,7 +11,8 @@ from einops import rearrange, repeat, einsum
 from layers.Embed import DataEmbedding
 
 
-class Model(nn.Module):
+@register_model('MambaSimple')
+class MambaSimple(nn.Module):
     """
     Mamba, linear-time sequence modeling with selective state spaces O(L)
     Paper link: https://arxiv.org/abs/2312.00752
@@ -16,7 +20,7 @@ class Model(nn.Module):
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(MambaSimple, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
 

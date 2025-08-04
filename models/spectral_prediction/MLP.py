@@ -1,13 +1,15 @@
 import torch.nn as nn
 import yaml
+from exp.exp_basic import register_model
 
-class Model(nn.Module):
+@register_model('MLP')
+class MLP(nn.Module):
     """
     A dynamically configurable MLP model for high-dimensional spectral regression tasks.
     The architecture can be defined via a YAML configuration file.
     """
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(MLP, self).__init__()
         self.input_dim = configs.feature_size * 2
         self.output_dim = configs.label_size
         self.dropout_rate = configs.dropout

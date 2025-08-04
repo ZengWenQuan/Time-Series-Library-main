@@ -4,10 +4,12 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
+from exp.exp_basic import register_model
 import numpy as np
 
 
-class Model(nn.Module):
+@register_model('Transformer')
+class Transformer(nn.Module):
     """
     Vanilla Transformer
     with O(L^2) complexity
@@ -15,7 +17,7 @@ class Model(nn.Module):
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(Transformer, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         # Embedding

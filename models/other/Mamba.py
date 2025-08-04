@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from mamba_ssm import Mamba
 
 from layers.Embed import DataEmbedding
+from exp.exp_basic import register_model
 
 class Model(nn.Module):
     

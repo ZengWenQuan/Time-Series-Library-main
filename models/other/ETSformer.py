@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 from layers.Embed import DataEmbedding
 from layers.ETSformer_EncDec import EncoderLayer, Encoder, DecoderLayer, Decoder, Transform
+from exp.exp_basic import register_model
 
 
-class Model(nn.Module):
+@register_model('ETSformer')
+class ETSformer(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2202.01381
     """
 
     def __init__(self, configs):
-        super(Model, self).__init__()
+        super(ETSformer, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
