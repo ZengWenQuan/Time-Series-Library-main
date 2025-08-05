@@ -65,8 +65,8 @@ conv_sequence_module:
 
 # 6. 预测头配置 (Prediction Head)
 prediction_head:
-  # 选择预测头类型: 'multi_head' 或 'probabilistic'
-  head_type: 'multi_head' # <-- 在此切换方案
+  # 选择预测头类型: 'multi_head', 'probabilistic', 或 'conv_ffn'
+  head_type: 'conv_ffn' # <-- 在此切换方案
 
   # --- 方案二：多头预测 (Multi-Head Prediction) 配置 ---
   multi_head_config:
@@ -80,6 +80,14 @@ prediction_head:
   # --- 方案三：概率预测 (Probabilistic Prediction) 配置 ---
   probabilistic_config:
     hidden_dims: [256, 128]
+    dropout: 0.3
+
+  # --- 新增：卷积FFN预测头 (ConvFFNHead) 配置 ---
+  conv_ffn_config:
+    conv_layers:
+      - {out_channels: 128, kernel_size: 5, stride: 1, padding: 2, pool_size: 2}
+      - {out_channels: 256, kernel_size: 3, stride: 1, padding: 1, pool_size: 2}
+    ffn_hidden_dims: [512, 256]
     dropout: 0.3
 
 # 7. 新增：训练设置

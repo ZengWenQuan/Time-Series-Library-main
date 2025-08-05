@@ -308,6 +308,57 @@ class MultiHeadPrediction(nn.Module):
         outputs = [self.heads[target](x) for target in self.heads]
         return torch.cat(outputs, dim=-1)
 
+class ConvFFNHead(nn.Module):
+    """新的预测头：卷积下采样 + FFN"""
+    def __init__(self, config, input_channels, label_size):
+        super(ConvFFNHead, self).__init__()
+        head_config = config['prediction_head']['conv_ffn_config']
+        use_batch_norm = config['global_settings']['use_batch_norm']
+        
+        # 1. 卷积下采样层
+        conv_layers = []
+        in_channels = input_channels
+        for layer_conf in head_config['conv_layers']:
+            conv_layers.append(nn.Conv1d(in_channels, layer_conf['out_channels'], kernel_size=layer_conf['kernel_size'], stride=layer_conf['stride'], padding=layer_conf['padding']))
+            if use_batch_norm:
+                conv_layers.append(nn.BatchNorm1d(layer_conf['out_channels']))
+            conv_layers.append(nn.ReLU(inplace=True))
+            if layer_conf.get('pool_size'):
+                conv_layers.append(nn.MaxPool1d(kernel_size=layer_conf['pool_size']))
+            in_channels = layer_conf['out_channels']
+        self.conv_net = nn.Sequential(*conv_layers)
+        
+        # 2. FFN层
+        # 动态计算FFN的输入维度
+        with torch.no_grad():
+            seq_len = config['fusion_module']['output_seq_len']
+            dummy_input = torch.randn(1, input_channels, seq_len)
+            dummy_output = self.conv_net(dummy_input)
+            ffn_input_dim = dummy_output.flatten(1).shape[1]
+
+        ffn_layers = []
+        in_dim = ffn_input_dim
+        for h_dim in head_config['ffn_hidden_dims']:
+            ffn_layers.append(nn.Linear(in_dim, h_dim))
+            if use_batch_norm:
+                ffn_layers.append(nn.BatchNorm1d(h_dim))
+            ffn_layers.append(nn.ReLU(inplace=True))
+            ffn_layers.append(nn.Dropout(head_config['dropout']))
+            in_dim = h_dim
+        ffn_layers.append(nn.Linear(in_dim, label_size))
+        self.ffn = nn.Sequential(*ffn_layers)
+
+    def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): 输入张量，形状为 [B, C_in, L_fusion]
+        Returns:
+            torch.Tensor: 预测结果，形状为 [B, label_size]
+        """
+        x = self.conv_net(x)
+        x = x.flatten(1)
+        return self.ffn(x)
+
 # --- 主模型 (最终修复版) ---
 @register_model('FreqInceptionConvNet')
 class FreqInceptionConvNet(nn.Module):
@@ -328,16 +379,22 @@ class FreqInceptionConvNet(nn.Module):
         self.inception_branch = InceptionBranch(model_config)
         fusion_input_channels = self.frequency_branch.output_channels + self.inception_branch.output_channels
         self.fusion_dropout = nn.Dropout(model_config['fusion_module']['dropout'])
-        self.sequence_module = ConvSequenceModule(model_config, fusion_input_channels)
-        self.prediction_head = self._build_prediction_head(model_config, self.sequence_module.output_dim)
+        self.prediction_head = self._build_prediction_head(model_config, fusion_input_channels)
         self._print_model_info(model_config)
 
-    def _build_prediction_head(self, config, input_dim):
+    def _build_prediction_head(self, config, fusion_input_channels):
         head_type = config['prediction_head']['head_type']
         if head_type == 'multi_head':
-            return MultiHeadPrediction(config, input_dim, self.target_names)
+            # 对于multi_head，我们需要先通过ConvSequenceModule提取序列特征
+            self.sequence_module = ConvSequenceModule(config, fusion_input_channels)
+            return MultiHeadPrediction(config, self.sequence_module.output_dim, self.target_names)
         elif head_type == 'probabilistic':
-            return self._build_probabilistic_head(config, input_dim)
+            self.sequence_module = ConvSequenceModule(config, fusion_input_channels)
+            return self._build_probabilistic_head(config, self.sequence_module.output_dim)
+        elif head_type == 'conv_ffn':
+            # 对于conv_ffn，它自己处理序列，所以我们不需要全局的sequence_module
+            self.sequence_module = None
+            return ConvFFNHead(config, fusion_input_channels, self.label_size)
         else:
             raise ValueError(f"未知的预测头类型: {head_type}")
 
@@ -394,8 +451,13 @@ class FreqInceptionConvNet(nn.Module):
         inception_features = self.inception_branch(absorption_spec)
         fused_features = torch.cat((freq_features, inception_features), dim=1)
         fused_features = self.fusion_dropout(fused_features)
-        sequence_features = self.sequence_module(fused_features)
-        predictions = self.prediction_head(sequence_features)
+        
+        if self.sequence_module is not None:
+            sequence_features = self.sequence_module(fused_features)
+            predictions = self.prediction_head(sequence_features)
+        else:
+            # 当使用ConvFFNHead时，直接将融合特征传入
+            predictions = self.prediction_head(fused_features)
         if self.head_type == 'probabilistic':
             predictions = predictions.view(-1, self.label_size, 2)
         if self.training:
