@@ -97,9 +97,12 @@ class FrequencyBranchMoE(nn.Module):
         super(FrequencyBranchMoE, self).__init__()
         self.device = device # 存储设备信息
         self.use_windowing = config['frequency_branch']['use_windowing']
+        self.window_type = config['frequency_branch'].get('window_type', 'hann')
         self.num_experts = config['frequency_branch']['moe']['num_experts']
         self.top_k = config['frequency_branch']['moe']['top_k']
-        self.aux_loss_factor = config['frequency_branch']['moe']['aux_loss_factor']
+        self.use_aux_loss = config['frequency_branch']['moe'].get('use_aux_loss', True)
+        if self.use_aux_loss:
+            self.aux_loss_factor = config['frequency_branch']['moe']['aux_loss_factor']
 
         self.experts = nn.ModuleList([Expert(config) for _ in range(self.num_experts)])
         self.gating = DeepConvGating(config)
@@ -118,7 +121,13 @@ class FrequencyBranchMoE(nn.Module):
         batch_size, seq_len = x.shape
 
         if self.use_windowing:
-            window = torch.hann_window(seq_len, device=self.device)
+            if self.window_type == 'hann':
+                window = torch.hann_window(seq_len, device=self.device)
+            elif self.window_type == 'hamming':
+                window = torch.hamming_window(seq_len, device=self.device)
+            else:
+                # 默认或不支持的类型，则使用汉宁窗
+                window = torch.hann_window(seq_len, device=self.device)
             x = x * window
         
         fft_features = torch.fft.rfft(x, norm='ortho')
@@ -127,9 +136,12 @@ class FrequencyBranchMoE(nn.Module):
         router_logits = self.gating(fft_features)
         routing_weights = F.softmax(router_logits, dim=1)
 
-        f_i = routing_weights.mean(0)
-        p_i = router_logits.mean(0)
-        aux_loss = self.aux_loss_factor * self.num_experts * (f_i * p_i).sum()
+        if self.use_aux_loss:
+            f_i = routing_weights.mean(0)
+            p_i = router_logits.mean(0)
+            aux_loss = self.aux_loss_factor * self.num_experts * (f_i * p_i).sum()
+        else:
+            aux_loss = torch.tensor(0.0, device=self.device)
 
         top_k_weights, top_k_indices = torch.topk(routing_weights, self.top_k, dim=-1)
         top_k_weights /= top_k_weights.sum(dim=-1, keepdim=True)

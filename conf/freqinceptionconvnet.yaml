@@ -2,17 +2,19 @@
 
 # 1. 全局设置
 global_settings:
-  use_batch_norm: True
+  use_batch_norm: false
 
 # 2. 频率分支配置 (FrequencyBranch) - 采用混合专家 (MoE) 架构
 frequency_branch:
   # 方案一的配置：是否使用窗口化和幅位/相位分解
   use_windowing: True
+  window_type: 'hamming'
 
   # 混合专家 (MoE) 配置
   moe:
     num_experts: 16  # 总共8个专家CNN
-    top_k: 4        # 每次选择2个专家
+    top_k: 4 # 每次选择2个专家
+    use_aux_loss: false        #是否使用aux_loss
     aux_loss_factor: 0.01 # 负载均衡损失的权重因子
 
   # 单个CNN专家网络 (Expert) 的架构配置
