@@ -168,10 +168,8 @@ class Exp_Spectral_Prediction(Exp_Basic):
         file_handler = logging.FileHandler(log_file)        
         file_handler.setLevel(logging.INFO)        
         file_handler.setFormatter(formatter)
-        
-        # Stream Handler (for console output)        
         stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)        
+        stream_handler.setLevel(logging.INFO)
         stream_handler.setFormatter(formatter)
         
         # Add handlers to the logger        
@@ -206,7 +204,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
             return Scaler(scaler_type=self.args.label_scaler_type, stats_dict=stats, target_names=self.targets)
         else:
-            df_raw = pd.read_csv(os.path.join(self.args.root_path, self.args.label_path))
+            df_raw = pd.read_csv(os.path.join(self.args.root_path, self.args.data_path))
             total_samples = len(df_raw)
             train_ratio, val_ratio, test_ratio = self.args.split_ratio
             train_boundary = int(total_samples * train_ratio)
@@ -258,13 +256,17 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
     def train(self,setting):
         # --- MLflow Setup ---
+        # 设置实验名称，如果不存在则会自动创建
         mlflow.set_experiment(self.args.task_name)
+        # 开始一次MLflow运行，所有记录都将保存在这个运行下
         mlflow.start_run(run_name=f"{self.args.model}_{self.args.model_id}")
+        # 记录所有超参数
         mlflow.log_params(vars(self.args))
 
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
+        # Conditionally load test data only if the test ratio is greater than zero
         if self.args.split_ratio[2] > 0:
             test_data, test_loader = self._get_data(flag='test')
         else:
@@ -373,7 +375,8 @@ class Exp_Spectral_Prediction(Exp_Basic):
             train_loss = np.average(train_loss)
             avg_grad_norm_before = np.mean(epoch_grad_norms_before)
             avg_grad_norm_after = np.mean(epoch_grad_norms_after)
-            
+            do_validation = (epoch + 1) % self.args.vali_interval == 0
+            is_last_epoch = epoch == self.args.train_epochs - 1
             vali_loss, vali_preds, vali_trues = self.vali(vali_data, vali_loader, criterion)
             test_loss, test_preds, test_trues = self.vali(test_data, test_loader, criterion)
             
@@ -390,55 +393,174 @@ class Exp_Spectral_Prediction(Exp_Basic):
             log_message += f" | lr: {current_lr:.6f} | {grad_info}"
             self.logger.info(log_message)
             
+            mlflow.log_metric('train_loss', train_loss.item(), step=epoch)
+            mlflow.log_metric('val_loss', vali_loss.item(), step=epoch )
+            mlflow.log_metric('test_loss', test_loss.item(), step=epoch)
             metrics_dict_vali = calculate_metrics(vali_preds, vali_trues, self.args.targets)
+            for key in metrics_dict_vali:
+                if 'mae' in key:
+                    mlflow.log_metric(key,metrics_dict_vali[key],step=epoch)
+            feh_metrics_vali = calculate_feh_classification_metrics(vali_preds, vali_trues)
             if test_data is not None:
                 metrics_dict_test = calculate_metrics(test_preds, test_trues, self.args.targets)
+                feh_metrics_test = calculate_feh_classification_metrics(test_preds, test_trues)
+                for key in metrics_dict_test:
+                    if 'mae' in key:
+                        mlflow.log_metric(key,metrics_dict_test[key],step=epoch)
                 
             prev_best_loss = early_stopping.val_loss_min
             early_stopping(vali_loss, self.model, chechpoint_path)
             if vali_loss < prev_best_loss:
-                self.logger.info("Validation loss improved. Logging new best model to MLflow...")
-                best_model_path = os.path.join(chechpoint_path, 'best.pth')
-                mlflow.pytorch.log_model(
-                    pytorch_model=self.model,
-                    artifact_path="best_model",
-                    signature=signature,
-                    registered_model_name=f"{self.args.model}_best"
-                )
+                # --- MLflow: Log best model artifact on improvement ---
+                self.logger.info("Validation loss improved. Logging new best model artifact to MLflow...")
+                best_model_path_for_artifact = os.path.join(chechpoint_path, 'best.pth')
+                mlflow.log_artifact(best_model_path_for_artifact, artifact_path="checkpoints")
 
-            latest_model_path = os.path.join(chechpoint_path, 'latest.pth')
-            torch.save(self.model.state_dict(), latest_model_path)
-            mlflow.log_artifact(latest_model_path, artifact_path="checkpoints")
+                save_dir = self.args.run_dir+"/metrics/best/"
+                save_regression_metrics(metrics_dict_vali, save_dir, self.targets, phase="vali")
+                save_feh_classification_metrics(feh_metrics_vali, save_dir, phase="vali")
+                if test_data is not None:
+                    save_regression_metrics(metrics_dict_test, save_dir, self.targets, phase="test")
+                    save_feh_classification_metrics(feh_metrics_test, save_dir, phase="test")
 
-            mlflow.log_metric('train_loss', train_loss, step=epoch)
-            if vali_loss is not None:
-                mlflow.log_metric('val_loss', vali_loss, step=epoch)
-            if test_loss is not None:
-                mlflow.log_metric('test_loss', test_loss, step=epoch)
-            mlflow.log_metric('learning_rate', current_lr, step=epoch)
-
-            if metrics_dict_vali:
-                for metric_name, metric_value in metrics_dict_vali.items():
-                    if 'mae' in metric_name.lower():
-                        mlflow.log_metric(f'val_{metric_name}', metric_value, step=epoch)
+            save_dir = self.args.run_dir+"/metrics/last/"
+            save_regression_metrics(metrics_dict_vali, save_dir, self.targets, phase="vali")
+            save_feh_classification_metrics(feh_metrics_vali, save_dir, phase="vali")
+            if test_data is not None:
+                save_regression_metrics(metrics_dict_test, save_dir, self.targets, phase="test")
+                save_feh_classification_metrics(feh_metrics_test, save_dir, phase="test")
+            if do_validation or is_last_epoch :
+                print("验证集指标:")
+                print(format_metrics(metrics_dict_vali))
+                print("\n验证集FeH分类指标:")
+                print(format_feh_classification_metrics(feh_metrics_vali))
+                if test_data is not None:
+                    print("\n测试集指标:")
+                    print(format_metrics(metrics_dict_test))
+                    print("\n测试集FeH分类指标:")
+                    print(format_feh_classification_metrics(feh_metrics_test))
             
-            if test_data is not None and metrics_dict_test:
-                for metric_name, metric_value in metrics_dict_test.items():
-                    if 'mae' in metric_name.lower():
-                        mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
-
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
 
-            if scheduler is not None:
-                scheduler.step()
-            else:
-                adjust_learning_rate(model_optim, epoch + 1, self.args)
+            # 使用通用函数绘制损失和学习率曲线
+            self._plot_curve({'Train Loss': history_train_loss, 'Validation Loss': history_vali_loss}, 'Loss', 'Loss', 'loss')
+            self._plot_curve({'Learning Rate': history_lr}, 'Learning Rate', 'Learning Rate', 'lr')
+
+            # --- MLflow Logging ---
+            mlflow.log_metric('train_loss', train_loss, step=epoch)
+            if vali_loss is not None:
+                mlflow.log_metric('val_loss', vali_loss, step=epoch)
+            mlflow.log_metric('learning_rate', current_lr, step=epoch)
+
+            # Log MAE for each validation target, excluding the overall 'mae'
+            if metrics_dict_vali:
+                for metric_name, metric_value in metrics_dict_vali.items():
+                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
+                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
+                        mlflow.log_metric(f'val_{metric_name}', metric_value, step=epoch)
             
+            # Log MAE for each test target, excluding the overall 'mae'
+            if test_data is not None and metrics_dict_test:
+                for metric_name, metric_value in metrics_dict_test.items():
+                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
+                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
+                        mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
+
+            # --- MLflow: Log last model artifact every epoch ---
+            last_model_path_for_artifact = os.path.join(chechpoint_path, 'last.pth')
+            torch.save(self.model.state_dict(), last_model_path_for_artifact)
+            mlflow.log_artifact(last_model_path_for_artifact, artifact_path="checkpoints")
+
+            adjust_learning_rate(model_optim, epoch + 1, self.args)
+            
+        last_model_path = chechpoint_path + '/' + 'last.pth'
+        torch.save(self.model.state_dict(), last_model_path)
+        print("the train is over,save the best model and the last model")
+        
+        # --- MLflow Artifacts & Model Registration ---
+        self.logger.info("Logging artifacts and registering model to MLflow...")
+
+        # 1. Log plots as artifacts
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'loss_curve.pdf'))
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
+
+        # 2. Register the best model to the MLflow Model Registry
+        best_model_path = os.path.join(chechpoint_path, 'best.pth')
+        if os.path.exists(best_model_path):
+            self.logger.info(f"Registering model '{self.args.model}' from {best_model_path}")
+            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+
+            # --- Infer Model Signature ---
+            # Create a dummy input tensor with the correct shape and type
+            # The batch size (e.g., 1) doesn't matter for signature inference
+            input_sample = torch.randn(1, self.args.feature_size * 2).to(self.device)
+            # Get a prediction to infer the output signature
+            output_sample = self.model(input_sample)
+            # Infer the signature
+            from mlflow.models.signature import infer_signature
+            signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
+            self.logger.info("Model signature inferred successfully.")
+            
+            # Use mlflow.pytorch.log_model for registration, now with signature
+            # --- MLflow Artifacts & Model Registration ---
+        self.logger.info("Logging artifacts and registering model to MLflow...")
+
+        # 1. Log plots as artifacts
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'loss_curve.pdf'))
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
+
+        # 2. Register the BEST model to the MLflow Model Registry
+        best_model_path = os.path.join(chechpoint_path, 'best.pth')
+        if os.path.exists(best_model_path):
+            self.logger.info(f"Registering best model '{self.args.model}' from {best_model_path}")
+            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+            from mlflow.models.signature import infer_signature
+            input_sample = torch.randn(1, self.args.feature_size * 2).to(self.device)
+            output_sample = self.model(input_sample)
+            signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
+            mlflow.pytorch.log_model(
+                pytorch_model=self.model,
+                name="model",  # <-- Updated from artifact_path to name as per warning
+                registered_model_name=self.args.model,
+                signature=signature
+            )
+            self.logger.info(f"Best model '{self.args.model}' registered successfully.")
+        else:
+            self.logger.warning(f"Could not find best model at '{best_model_path}' to register.")
+
+        # 3. Additionally, log the LAST model's weights as a simple artifact
+        last_model_path = os.path.join(chechpoint_path, 'last.pth')
+        if os.path.exists(last_model_path):
+            mlflow.log_artifact(last_model_path, artifact_path="checkpoints")
+            self.logger.info(f"Last model weights saved to MLflow artifacts under 'checkpoints/'.")
+
+        # 4. End the MLflow run
+        if mlflow.end_run():
+            self.logger.info(f"Model '{self.args.model}' registered successfully with signature.")
+        else:
+            self.logger.warning(f"Could not find best model at '{best_model_path}' to register.")
+
+        # 3. End the MLflow run
         mlflow.end_run()
 
         return self.model
+
+    def _plot_curve(self, data_history, title, y_label, file_suffix):
+        """通用绘图函数，可绘制损失或学习率等曲线"""
+        plt.figure(figsize=(10, 6))
+        for label, values in data_history.items():
+            plt.plot(values, label=label)
+        
+        plt.title(f'Training and Validation {title}')
+        plt.xlabel('Epoch')
+        plt.ylabel(y_label)
+        plt.legend()
+        plt.grid(True)
+        save_path = os.path.join(self.args.run_dir, f'{file_suffix}_curve.pdf')
+        plt.savefig(save_path, format='pdf')
+        plt.close()
 
     def test(self, setting, test=0):
         test_data, test_loader = self._get_data(flag='test')
@@ -474,30 +596,42 @@ class Exp_Spectral_Prediction(Exp_Basic):
             preds = self.label_scaler.inverse_transform(preds)
             trues = self.label_scaler.inverse_transform(trues)
 
+        # --- Calculate and print metrics ---
         metrics_dict = calculate_metrics(preds, trues, self.targets)
+        feh_metrics = calculate_feh_classification_metrics(preds, trues)
+        
         print("Test Set Regression Metrics:")
         print(format_metrics(metrics_dict))
         
+        print("Test Set FeH Classification Metrics:")
+        print(format_feh_classification_metrics(feh_metrics))
+        
+        # --- Save results to CSV and metrics plots ---
         if hasattr(self.args, 'run_dir') and self.args.run_dir:
             save_dir = self.args.run_dir+'/test_results/'
             os.makedirs(save_dir, exist_ok=True)
 
+            # Create DataFrame for CSV export
             results_df = pd.DataFrame({'obsid': obsids})
             results_df['obsid'] = results_df['obsid'].astype('int64')
             for i, target_name in enumerate(self.targets):
                 results_df[f'{target_name}_true'] = trues[:, i]
                 results_df[f'{target_name}_pred'] = preds[:, i]
             
+            # Reorder columns to have true/pred pairs
             column_order = ['obsid']
             for target_name in self.targets:
                 column_order.append(f'{target_name}_true')
                 column_order.append(f'{target_name}_pred')
             results_df = results_df[column_order]
 
+            # Save to CSV
             csv_path = os.path.join(save_dir, 'predictions.csv')
             results_df.to_csv(csv_path, index=False)
             print(f"Test results saved to {csv_path}")
 
+            # Save metric plots
             save_regression_metrics(metrics_dict, save_dir, self.targets, phase="test")
+            save_feh_classification_metrics(feh_metrics, save_dir, phase="test")
         
         return metrics_dict['mae'], metrics_dict['mse'], metrics_dict['rmse']
