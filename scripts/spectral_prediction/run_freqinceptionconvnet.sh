@@ -6,8 +6,8 @@ python3 -u run.py \
   --task_name spectral_prediction \
   --is_training 1 \
   --root_path ./dataset/spectral/ \
-  --spectra_continuum_path final_spectra_continuum_full.csv \
-  --spectra_normalized_path final_spectra_normalized_full.csv \
+  --spectra_continuum_path final_spectra_continuum.csv \
+  --spectra_normalized_path final_spectra_normalized.csv \
   --label_path removed_with_rv.csv \
   --model_id FreqInceptionConvNet_spectral_v1 \
   --model FreqInceptionConvNet \

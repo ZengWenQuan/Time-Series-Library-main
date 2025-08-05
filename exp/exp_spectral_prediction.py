@@ -85,8 +85,11 @@ class Exp_Spectral_Prediction(Exp_Basic):
         self.feature_scaler=self.get_feature_scaler()
         info_model=self.args.run_dir+'/model.txt'
         with open(info_model,'w') as f:
+            # 写入模型结构
             f.write("模型结构:\n")
             f.write(f"{self.model}\n\n")
+            
+            # 写入每层参数数量
             f.write("每层参数数量:\n")
             sum_param=0
             for name, param in self.model.named_parameters():                
@@ -151,8 +154,10 @@ class Exp_Spectral_Prediction(Exp_Basic):
         file_handler = logging.FileHandler(log_file)        
         file_handler.setLevel(logging.INFO)        
         file_handler.setFormatter(formatter)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)
+        
+        # Stream Handler (for console output)        
+        stream_handler = logging.StreamHandler()        
+        stream_handler.setLevel(logging.INFO)        
         stream_handler.setFormatter(formatter)
         
         # Add handlers to the logger        
@@ -270,6 +275,16 @@ class Exp_Spectral_Prediction(Exp_Basic):
         mlflow.log_param("loss_function", final_loss_function_name)
         self.logger.info(f"MLflow: Logged loss_function = {final_loss_function_name}")
         
+        # --- Infer Model Signature for MLflow ---
+        self.logger.info("Inferring model signature for MLflow...")
+        input_sample = torch.randn(1, self.args.feature_size * 2).to(self.device)
+        output_sample = self.model(input_sample)
+        if isinstance(output_sample, tuple):
+            output_sample = output_sample[0] # Use the main output for signature
+        from mlflow.models.signature import infer_signature
+        signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
+        #elf.logger.info("Model signature inferred successfully.")
+
         history_train_loss = []
         history_vali_loss = []
         history_lr = []
@@ -318,12 +333,10 @@ class Exp_Spectral_Prediction(Exp_Basic):
                     
                     # 梯度裁剪（在scaled gradients上）
                     self.scaler.unscale_(model_optim)
-                    grad_norm_before_tensor = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
-                    grad_norm_before = grad_norm_before_tensor.item() if torch.isfinite(grad_norm_before_tensor) else float('inf')
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
                     self.scaler.step(model_optim)
                     self.scaler.update()
                 else:
-                    # Standard precision training
                     model_output = self.model(batch_x)
                     if isinstance(model_output, tuple) and self.model.training:
                         outputs, aux_loss = model_output
@@ -333,35 +346,22 @@ class Exp_Spectral_Prediction(Exp_Basic):
                         outputs = model_output
                         main_loss = criterion(outputs, batch_y)
                         loss = main_loss
-                        aux_loss = torch.tensor(0.0) # for logging
+                        aux_loss =None
 
                     if hasattr(self.args, 'loss_threshold') and loss.item() > self.args.loss_threshold:
                         print(f"[Warning] Batch {i+1}/{train_steps}: Loss {loss.item():.2f} exceeds threshold. Skipping.")
                         continue
                     
                     loss.backward()
-                    
-                    # 梯度裁剪
-                    grad_norm_before_tensor = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
-                    grad_norm_before = grad_norm_before_tensor.item() if torch.isfinite(grad_norm_before_tensor) else float('inf')
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
                     model_optim.step()
 
-                # --- End Training Logic ---
-
-                # Calculate norm after clipping for logging
-                norm_after_sq = 0.0
-                for p in self.model.parameters():
-                    if p.grad is not None:
-                        param_norm = p.grad.data.norm(2)
-                        norm_after_sq += param_norm.item() ** 2
-                grad_norm_after = norm_after_sq ** 0.5
-                # --- End Gradient Clipping & Logging ---
-
                 train_loss.append(loss.item())
-                # Log losses to MLflow for each batch
-                mlflow.log_metric('batch_total_loss', loss.item(), step=epoch * train_steps + i)
-                mlflow.log_metric('batch_main_loss', main_loss.item(), step=epoch * train_steps + i)
-                mlflow.log_metric('batch_aux_loss', aux_loss.item(), step=epoch * train_steps + i)
+                if (i + 1) % 100 == 0:
+                    mlflow.log_metric('batch_total_loss', loss.item(), step=epoch * train_steps + i)
+                    mlflow.log_metric('batch_main_loss', main_loss.item(), step=epoch * train_steps + i)
+                    if aux_loss is not None:
+                        mlflow.log_metric('batch_aux_loss', aux_loss.item(), step=epoch * train_steps + i)
 
             train_loss = np.average(train_loss)
             
@@ -405,11 +405,6 @@ class Exp_Spectral_Prediction(Exp_Basic):
             prev_best_loss = early_stopping.val_loss_min
             early_stopping(vali_loss, self.model, chechpoint_path)
             if vali_loss < prev_best_loss:
-                # --- MLflow: Log best model artifact on improvement ---
-                self.logger.info("Validation loss improved. Logging new best model artifact to MLflow...")
-                best_model_path_for_artifact = os.path.join(chechpoint_path, 'best.pth')
-                mlflow.log_artifact(best_model_path_for_artifact, artifact_path="checkpoints")
-
                 save_dir = self.args.run_dir+"/metrics/best/"
                 save_regression_metrics(metrics_dict_vali, save_dir, self.targets, phase="vali")
                 save_feh_classification_metrics(feh_metrics_vali, save_dir, phase="vali")
@@ -446,26 +441,23 @@ class Exp_Spectral_Prediction(Exp_Basic):
             mlflow.log_metric('train_loss', train_loss, step=epoch)
             if vali_loss is not None:
                 mlflow.log_metric('val_loss', vali_loss, step=epoch)
+            if test_loss is not None:
+                mlflow.log_metric('test_loss', test_loss, step=epoch)
             mlflow.log_metric('learning_rate', current_lr, step=epoch)
 
-            # Log MAE for each validation target, excluding the overall 'mae'
             if metrics_dict_vali:
                 for metric_name, metric_value in metrics_dict_vali.items():
-                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
-                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
+                    if 'mae' in metric_name.lower() and 'mae' !=metric_name.lower():
                         mlflow.log_metric(f'val_{metric_name}', metric_value, step=epoch)
             
-            # Log MAE for each test target, excluding the overall 'mae'
             if test_data is not None and metrics_dict_test:
                 for metric_name, metric_value in metrics_dict_test.items():
-                    # Log per-label MAE (e.g., mae_Teff), but skip the overall 'mae'
-                    if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
+                    if 'mae' in metric_name.lower() and 'mae' !=metric_name.lower():
                         mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
 
-            # --- MLflow: Log last model artifact every epoch ---
-            last_model_path_for_artifact = os.path.join(chechpoint_path, 'last.pth')
-            torch.save(self.model.state_dict(), last_model_path_for_artifact)
-            mlflow.log_artifact(last_model_path_for_artifact, artifact_path="checkpoints")
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
 
             adjust_learning_rate(model_optim, epoch + 1, self.args)
             
@@ -516,7 +508,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
             signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
             mlflow.pytorch.log_model(
                 pytorch_model=self.model,
-                name="model",  # <-- Updated from artifact_path to name as per warning
+                artifact_path="model",
                 registered_model_name=self.args.model,
                 signature=signature
             )

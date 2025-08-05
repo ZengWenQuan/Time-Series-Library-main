@@ -278,7 +278,7 @@ if __name__ == '__main__':
         
         # 设置实验记录
         # 获取当前时间并加上8小时
-        current_time = datetime.datetime.now() + datetime.timedelta(hours=8)
+        current_time = datetime.datetime.now()
         timestamp = current_time.strftime("%Y%m%d_%H%M%S")
         
         # 创建runs目录结构
