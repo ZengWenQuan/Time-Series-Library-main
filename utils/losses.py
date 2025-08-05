@@ -20,7 +20,7 @@ import torch as t
 import torch.nn as nn
 import numpy as np
 import pdb
-
+import torch
 
 def divide_no_nan(a, b):
     """
@@ -89,60 +89,78 @@ class mase_loss(nn.Module):
         return t.mean(t.abs(target - forecast) * masked_masep_inv)
 
 
+class GaussianNLLLoss(nn.Module):
+    """高斯负对数似然损失函数"""
+    def __init__(self, reduction='mean'):
+        super(GaussianNLLLoss, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, pred, true):
+        # pred: [B, L, 2] (mean, log_var)
+        # true: [B, L]
+        mean = pred[..., 0]
+        log_var = pred[..., 1]
+        
+        # 确保方差为正
+        var = torch.exp(log_var)
+        
+        # 计算损失
+        log_likelihood = -0.5 * (log_var + (true - mean)**2 / var)
+        loss = -log_likelihood
+        
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
 class RegressionFocalLoss(nn.Module):
     """
-    回归任务的Focal Loss
-    
-    参数:
-    - alpha: 平衡因子，控制正负样本的权重
-    - gamma: 聚焦参数，控制难易样本的权重
-    - reduction: 损失聚合方式，'mean'、'sum'或'none'
-    - threshold: 误差阈值，超过此阈值的样本被视为难样本
-    - base_loss: 基础损失函数，可以是'mse'、'mae'或'smooth_l1'
+    Focal Loss for Regression.
+
+    This is a PyTorch implementation of the Focal Loss for regression tasks,
+    designed to focus training on "hard" samples by assigning them more weight.
+    The loss is calculated as:
+        loss = |y_true - y_pred|^gamma * L1Loss(y_true, y_pred)
+
+    Args:
+        gamma (float): The focusing parameter. Higher values of gamma give more
+                       weight to hard-to-predict samples. Default: 1.5
+        reduction (str, optional): Specifies the reduction to apply to the output:
+                                   'none' | 'mean' | 'sum'. Default: 'mean'
     """
-    def __init__(self, alpha=1.0, gamma=2.0, reduction='mean', threshold=0.5, base_loss='mse'):
+    def __init__(self, gamma=1.5, reduction='mean'):
         super(RegressionFocalLoss, self).__init__()
-        self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
-        self.threshold = threshold
-        
-        # 选择基础损失函数
-        if base_loss == 'mse':
-            self.base_criterion = nn.MSELoss(reduction='none')
-        elif base_loss == 'mae':
-            self.base_criterion = nn.L1Loss(reduction='none')
-        elif base_loss == 'smooth_l1':
-            self.base_criterion = nn.SmoothL1Loss(reduction='none')
-        else:
-            raise ValueError(f"不支持的基础损失函数: {base_loss}")
-    
+        # We use L1Loss with no reduction to get the per-sample error
+        self.base_criterion = nn.L1Loss(reduction='none')
+
     def forward(self, pred, target):
         """
-        计算回归Focal Loss
-        
-        参数:
-        - pred: 预测值 [batch_size, num_targets]
-        - target: 目标值 [batch_size, num_targets]
-        
-        返回:
-        - loss: 损失值
+        Forward pass.
+
+        Args:
+            pred (torch.Tensor): The predicted values.
+            target (torch.Tensor): The ground truth values.
+
+        Returns:
+            torch.Tensor: The calculated focal regression loss.
         """
-        # 计算基础损失
-        base_loss = self.base_criterion(pred, target)
-        
-        # 计算误差权重
-        # 误差越大，权重越小（对于gamma > 0）
-        error_ratio = t.clamp(base_loss / self.threshold, min=0, max=1)
-        weights = self.alpha * (1 - error_ratio) ** self.gamma
-        
-        # 应用权重到基础损失
-        focal_loss = weights * base_loss
-        
-        # 根据reduction方式聚合损失
+        # 1. Calculate the absolute error for each sample
+        l1_loss = self.base_criterion(pred, target)
+
+        # 2. Create the modulating factor (focal weight)
+        # This gives higher weight to samples with larger errors.
+        focal_weight = torch.pow(l1_loss, self.gamma)
+
+        # 3. The final loss is the element-wise product of the focal weight and the L1 loss
+        focal_loss = focal_weight * l1_loss
+
+        # 4. Apply the specified reduction
         if self.reduction == 'mean':
-            return t.mean(focal_loss)
+            return focal_loss.mean()
         elif self.reduction == 'sum':
-            return t.sum(focal_loss)
-        else:  # 'none'
+            return focal_loss.sum()
+        else: # 'none'
             return focal_loss

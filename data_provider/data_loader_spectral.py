@@ -133,10 +133,23 @@ class Dataset_Spectral(Dataset):
         # Find common obsids
         common_obsids = list(set(features_continuum_df['obsid']) & set(features_normalized_df['obsid']) & set(labels_df['obsid']))
         
-        # Filter and sort dataframes by common obsids
-        features_continuum_df = features_continuum_df[features_continuum_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
-        features_normalized_df = features_normalized_df[features_normalized_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
-        labels_df = labels_df[labels_df['obsid'].isin(common_obsids)].sort_values(by='obsid').reset_index(drop=True)
+        # Shuffle obsids for reproducible random split. Use seed 42 if not provided.
+        seed = self.args.seed if hasattr(self.args, 'seed') and self.args.seed is not None else 42
+        print(f"Shuffling dataset with random seed: {seed}")
+        import random
+        random.seed(seed)
+        random.shuffle(common_obsids)
+
+        # Filter and align dataframes to the (potentially shuffled) common_obsids
+        # First, set 'obsid' as the index to allow for efficient lookup and alignment.
+        features_continuum_df.set_index('obsid', inplace=True)
+        features_normalized_df.set_index('obsid', inplace=True)
+        labels_df.set_index('obsid', inplace=True)
+
+        # Now, re-order the dataframes based on the common_obsids list.
+        features_continuum_df = features_continuum_df.loc[common_obsids].reset_index()
+        features_normalized_df = features_normalized_df.loc[common_obsids].reset_index()
+        labels_df = labels_df.loc[common_obsids].reset_index()
 
         # Get feature and target columns based on feature_size
         feature_cols_continuum = features_continuum_df.columns[1:self.feature_size+1]
@@ -171,6 +184,7 @@ class Dataset_Spectral(Dataset):
         if self.feature_scaler:
             data_x_continuum_scaled = self.feature_scaler.transform(data_x_continuum)
         else:
+            raise ValueError("没有提供连续谱归一化器")
             data_x_continuum_scaled = data_x_continuum
         
         # Concatenate scaled continuum features with the original normalized features
@@ -180,6 +194,7 @@ class Dataset_Spectral(Dataset):
         if self.label_scaler:
             data_y_scaled = self.label_scaler.transform(data_y)
         else:
+            raise ValueError("没有提供标签归一化器")
             data_y_scaled = data_y
         
         # Define borders for train, val, test sets

@@ -19,6 +19,27 @@ import torch.nn.init as init
 import yaml
 from exp.exp_basic import register_model
 
+class GatedActivation(nn.Module):
+    """
+    Gated Activation Unit to control feature flow.
+    """
+    def __init__(self, channels):
+        super(GatedActivation, self).__init__()
+        # A simple 1x1 convolution to learn the gate weights
+        self.gate_conv = nn.Conv1d(channels, channels, kernel_size=1)
+        self._initialize_weights()
+
+    def forward(self, x):
+        # Apply sigmoid to the gate's output to get values between 0 and 1
+        gate_values = torch.sigmoid(self.gate_conv(x))
+        # Element-wise multiplication
+        return x * gate_values
+
+    def _initialize_weights(self):
+        init.kaiming_normal_(self.gate_conv.weight, mode='fan_out', nonlinearity='relu')
+        if self.gate_conv.bias is not None:
+            init.constant_(self.gate_conv.bias, 0)
+
 class PyramidFeatureExtractor(nn.Module):
     """
     Extracts features from a spectrum using a multi-scale pyramid architecture.
@@ -93,13 +114,7 @@ class PyramidBlock(nn.Module):
             self.residual = nn.Sequential(*layers)
             
         if self.use_attention:
-            self.attention = nn.Sequential(
-                nn.AdaptiveAvgPool1d(1),
-                nn.Conv1d(output_channel * 3, max(1, output_channel * 3 // attention_reduction), kernel_size=1),
-                nn.ReLU(inplace=True),
-                nn.Conv1d(max(1, output_channel * 3 // attention_reduction), output_channel * 3, kernel_size=1),
-                nn.Sigmoid()
-            )
+            self.gate = GatedActivation(output_channel * 3)
         
         self._initialize_weights()
     
@@ -119,8 +134,7 @@ class PyramidBlock(nn.Module):
         pyramid_out = torch.cat([fine_out, medium_out, coarse_out], dim=1)
         
         if self.use_attention:
-            attention_weights = self.attention(pyramid_out)
-            pyramid_out = pyramid_out * attention_weights
+            pyramid_out = self.gate(pyramid_out)
         
         return F.relu(pyramid_out + self.residual(x))
 
@@ -209,7 +223,6 @@ class DualPyramidNet(nn.Module):
         
         return output
 
-if __name__=='main' :
+if __name__ == '__main__':
     continuum_data=torch.rand(3,4802)
     normalized_data=torch.rand(3,4802)
-    

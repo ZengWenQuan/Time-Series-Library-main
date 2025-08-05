@@ -56,8 +56,8 @@ if __name__ == '__main__':
     # -- data parser
     parser.add_argument('--data', type=str, required=True, default='ETTm1',
                         help='dataset type')
-    parser.add_argument('--root_path', type=str, default='./dataset/ETT/', help='root path of the data file')
-    parser.add_argument('--data_path', type=str, default='ETTh1.csv', help='data file')
+    parser.add_argument('--root_path', type=str, default='./dataset/spectral/', help='root path of the data file')
+    parser.add_argument('--data_path', type=str, default='spectral_data.csv', help='data file')
     parser.add_argument('--plot_loss', type=bool, default=False, help='whether to plot the loss')
     parser.add_argument('--features', type=str, default='M',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')

@@ -5,8 +5,7 @@ from models import *
 from utils.tools import EarlyStopping, adjust_learning_rate
 from utils.stellar_metrics import calculate_metrics, format_metrics, calculate_feh_classification_metrics, format_feh_classification_metrics
 from utils.stellar_metrics import save_regression_metrics, save_feh_classification_metrics
-from utils.losses import RegressionFocalLoss
-
+from utils.losses import RegressionFocalLoss ,GaussianNLLLoss
 import numpy as np
 import torch
 import torch.nn as nn
@@ -45,12 +44,36 @@ class Exp_Spectral_Prediction(Exp_Basic):
     def __init__(self, args):
         super(Exp_Spectral_Prediction, self).__init__(args)
         self._setup_logger()
-        # 恒星参数名称
         self.targets = args.targets
         self.args=args
         
-        # 混合精度训练设置
-        self.use_amp = getattr(args, 'use_amp', False)
+        # 从配置文件加载额外设置
+        if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
+            try:
+                with open(args.model_conf, 'r') as f:
+                    model_config = yaml.safe_load(f)
+                
+                # 读取训练设置
+                training_settings = model_config.get('training_settings', {})
+                self.loss_function_name = training_settings.get('loss_function', 'RegressionFocalLoss')
+
+                # 读取混合精度设置
+                use_amp_from_conf = model_config.get('mixed_precision', False)
+                if use_amp_from_conf and not getattr(args, 'use_amp', False):
+                    print("✓ 从模型配置文件中启用混合精度训练")
+                    self.use_amp = True
+                else:
+                    self.use_amp = getattr(args, 'use_amp', False)
+
+            except Exception as e:
+                print(f"警告: 无法从配置文件中读取设置: {e}")
+                self.loss_function_name = 'RegressionFocalLoss'
+                self.use_amp = getattr(args, 'use_amp', False)
+        else:
+            self.loss_function_name = 'RegressionFocalLoss'
+            self.use_amp = getattr(args, 'use_amp', False)
+
+        # 初始化混合精度 scaler
         if self.use_amp:
             print("✓ 混合精度训练已启用 (AMP)")
             self.scaler = GradScaler()
@@ -58,37 +81,49 @@ class Exp_Spectral_Prediction(Exp_Basic):
             print("✓ 使用标准精度训练")
             self.scaler = None
         
-        # 如果有模型配置文件，检查其中的混合精度设置
-        if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
-            try:
-                with open(args.model_conf, 'r') as f:
-                    model_config = yaml.safe_load(f)
-                    
-                # 从配置文件中读取混合精度设置
-                config_amp = model_config.get('mixed_precision', False)
-                if config_amp and not self.use_amp:
-                    print("✓ 从模型配置文件中启用混合精度训练")
-                    self.use_amp = True
-                    self.scaler = GradScaler()
-                    
-            except Exception as e:
-                print(f"警告: 无法从配置文件中读取混合精度设置: {e}")
-        
         self.label_scaler=self.get_label_scaler()
         self.feature_scaler=self.get_feature_scaler()
         info_model=self.args.run_dir+'/model.txt'
         with open(info_model,'w') as f:
-            # 写入模型结构
             f.write("模型结构:\n")
             f.write(f"{self.model}\n\n")
-            
-            # 写入每层参数数量
             f.write("每层参数数量:\n")
             sum_param=0
             for name, param in self.model.named_parameters():                
                 f.write(f"  {name}: {param.numel():,} 参数\n")
                 sum_param+=param.numel()
             f.write(f'总参数量：{sum_param}')
+
+    def _select_criterion(self):
+        # 1. 最高优先级：如果使用概率头，则强制使用NLL损失
+        if hasattr(self.model, 'head_type') and self.model.head_type == 'probabilistic':
+            print("✓ 检测到概率预测头，强制使用高斯负对数似然损失 (GaussianNLLLoss)")
+            return GaussianNLLLoss()
+
+        # 2. 创建损失函数别名映射 (不区分大小写)
+        loss_mapping = {
+            'l1': nn.L1Loss,
+            'mae': nn.L1Loss,
+            'l2': nn.MSELoss,
+            'mse': nn.MSELoss,
+            'regressionfocalloss': RegressionFocalLoss,
+            'gaussiannllloss': GaussianNLLLoss
+        }
+
+        # 3. 从配置中获取名称，并进行标准化处理
+        normalized_loss_name = self.loss_function_name.lower()
+
+        # 4. 查找并实例化损失函数
+        loss_class = loss_mapping.get(normalized_loss_name)
+
+        if loss_class:
+            print(f"✓ 使用 {loss_class.__name__} 损失函数 (根据配置 '{self.loss_function_name}')")
+            return loss_class()
+        else:
+            # 5. 如果找不到，则使用默认值并发出警告
+            print(f"警告: 未知的损失函数别名 '{self.loss_function_name}'. 将使用默认的 RegressionFocalLoss.")
+            return RegressionFocalLoss()
+
     def _get_data(self, flag):
         data_set, data_loader = data_provider(self.args, flag, self.label_scaler, self.feature_scaler)
         return data_set, data_loader
@@ -116,10 +151,8 @@ class Exp_Spectral_Prediction(Exp_Basic):
         file_handler = logging.FileHandler(log_file)        
         file_handler.setLevel(logging.INFO)        
         file_handler.setFormatter(formatter)
-        
-        # Stream Handler (for console output)        
-        stream_handler = logging.StreamHandler()        
-        stream_handler.setLevel(logging.INFO)        
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
         stream_handler.setFormatter(formatter)
         
         # Add handlers to the logger        
@@ -180,10 +213,16 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 batch_y = batch_y.float().to(self.device)
 
                 outputs = self.model(batch_x)
+                
+                # 处理不同预测头的输出
+                if hasattr(self.model, 'head_type') and self.model.head_type == 'probabilistic':
+                    pred = outputs[..., 0].detach() # 只取均值用于评估
+                    loss = criterion(outputs, batch_y)
+                else:
+                    pred = outputs.detach()
+                    loss = criterion(pred, batch_y)
 
-                pred = outputs.detach()
                 true = batch_y.detach()
-                loss = criterion(pred, true)
                 total_loss.append(loss.item())
                 all_preds.append(pred.cpu().numpy())
                 all_trues.append(true.cpu().numpy())
@@ -225,6 +264,11 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
+
+        # 在MLflow中记录最终选择的损失函数
+        final_loss_function_name = criterion.__class__.__name__
+        mlflow.log_param("loss_function", final_loss_function_name)
+        self.logger.info(f"MLflow: Logged loss_function = {final_loss_function_name}")
         
         history_train_loss = []
         history_vali_loss = []
@@ -242,6 +286,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
             
             # --- Gradient Clipping & Logging ---
             max_norm = self.args.max_grad_norm if hasattr(self.args, 'max_grad_norm') else 20.0
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
             
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark,batch_obsid) in enumerate(train_loader):
                 iter_count += 1
@@ -252,12 +297,20 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 # 混合精度训练
                 if self.use_amp and self.scaler is not None:
                     with autocast():
-                        outputs = self.model(batch_x)
-                        loss = criterion(outputs, batch_y)
-                    
-                    # Check for abnormally high loss
+                        model_output = self.model(batch_x)
+                        # Check if the model is our MoE model in training mode
+                        if isinstance(model_output, tuple) and self.model.training:
+                            outputs, aux_loss = model_output
+                            main_loss = criterion(outputs, batch_y)
+                            loss = main_loss + aux_loss
+                        else:
+                            outputs = model_output
+                            main_loss = criterion(outputs, batch_y)
+                            loss = main_loss
+                            aux_loss = torch.tensor(0.0) # for logging
+
                     if hasattr(self.args, 'loss_threshold') and loss.item() > self.args.loss_threshold:
-                        print(f"[Warning] Batch {i+1}/{train_steps}: Loss {loss.item():.2f} exceeds threshold {self.args.loss_threshold}. Skipping batch.")
+                        print(f"[Warning] Batch {i+1}/{train_steps}: Loss {loss.item():.2f} exceeds threshold. Skipping.")
                         continue
                     
                     # 缩放loss并反向传播
@@ -266,34 +319,34 @@ class Exp_Spectral_Prediction(Exp_Basic):
                     # 梯度裁剪（在scaled gradients上）
                     self.scaler.unscale_(model_optim)
                     grad_norm_before_tensor = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
-                    if torch.isfinite(grad_norm_before_tensor):
-                        grad_norm_before = grad_norm_before_tensor.item()
-                    else:
-                        grad_norm_before = float('inf')
-                    
-                    # 更新参数
+                    grad_norm_before = grad_norm_before_tensor.item() if torch.isfinite(grad_norm_before_tensor) else float('inf')
                     self.scaler.step(model_optim)
                     self.scaler.update()
                 else:
-                    # 标准精度训练
-                    outputs = self.model(batch_x)
-                    loss = criterion(outputs, batch_y)
+                    # Standard precision training
+                    model_output = self.model(batch_x)
+                    if isinstance(model_output, tuple) and self.model.training:
+                        outputs, aux_loss = model_output
+                        main_loss = criterion(outputs, batch_y)
+                        loss = main_loss + aux_loss
+                    else:
+                        outputs = model_output
+                        main_loss = criterion(outputs, batch_y)
+                        loss = main_loss
+                        aux_loss = torch.tensor(0.0) # for logging
 
-                    # Check for abnormally high loss
                     if hasattr(self.args, 'loss_threshold') and loss.item() > self.args.loss_threshold:
-                        print(f"[Warning] Batch {i+1}/{train_steps}: Loss {loss.item():.2f} exceeds threshold {self.args.loss_threshold}. Skipping batch.")
+                        print(f"[Warning] Batch {i+1}/{train_steps}: Loss {loss.item():.2f} exceeds threshold. Skipping.")
                         continue
                     
                     loss.backward()
                     
                     # 梯度裁剪
                     grad_norm_before_tensor = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
-                    if torch.isfinite(grad_norm_before_tensor):
-                        grad_norm_before = grad_norm_before_tensor.item()
-                    else:
-                        grad_norm_before = float('inf')
-                    
+                    grad_norm_before = grad_norm_before_tensor.item() if torch.isfinite(grad_norm_before_tensor) else float('inf')
                     model_optim.step()
+
+                # --- End Training Logic ---
 
                 # Calculate norm after clipping for logging
                 norm_after_sq = 0.0
@@ -304,8 +357,11 @@ class Exp_Spectral_Prediction(Exp_Basic):
                 grad_norm_after = norm_after_sq ** 0.5
                 # --- End Gradient Clipping & Logging ---
 
-                model_optim.step()
                 train_loss.append(loss.item())
+                # Log losses to MLflow for each batch
+                mlflow.log_metric('batch_total_loss', loss.item(), step=epoch * train_steps + i)
+                mlflow.log_metric('batch_main_loss', main_loss.item(), step=epoch * train_steps + i)
+                mlflow.log_metric('batch_aux_loss', aux_loss.item(), step=epoch * train_steps + i)
 
             train_loss = np.average(train_loss)
             
@@ -349,6 +405,11 @@ class Exp_Spectral_Prediction(Exp_Basic):
             prev_best_loss = early_stopping.val_loss_min
             early_stopping(vali_loss, self.model, chechpoint_path)
             if vali_loss < prev_best_loss:
+                # --- MLflow: Log best model artifact on improvement ---
+                self.logger.info("Validation loss improved. Logging new best model artifact to MLflow...")
+                best_model_path_for_artifact = os.path.join(chechpoint_path, 'best.pth')
+                mlflow.log_artifact(best_model_path_for_artifact, artifact_path="checkpoints")
+
                 save_dir = self.args.run_dir+"/metrics/best/"
                 save_regression_metrics(metrics_dict_vali, save_dir, self.targets, phase="vali")
                 save_feh_classification_metrics(feh_metrics_vali, save_dir, phase="vali")
@@ -401,6 +462,11 @@ class Exp_Spectral_Prediction(Exp_Basic):
                     if 'mae' in metric_name.lower() and metric_name.lower() != 'mae':
                         mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
 
+            # --- MLflow: Log last model artifact every epoch ---
+            last_model_path_for_artifact = os.path.join(chechpoint_path, 'last.pth')
+            torch.save(self.model.state_dict(), last_model_path_for_artifact)
+            mlflow.log_artifact(last_model_path_for_artifact, artifact_path="checkpoints")
+
             adjust_learning_rate(model_optim, epoch + 1, self.args)
             
         last_model_path = chechpoint_path + '/' + 'last.pth'
@@ -415,20 +481,58 @@ class Exp_Spectral_Prediction(Exp_Basic):
         mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
 
         # 2. Register the best model to the MLflow Model Registry
-        # Note: EarlyStopping saves the best model as 'best.pth'
         best_model_path = os.path.join(chechpoint_path, 'best.pth')
         if os.path.exists(best_model_path):
             self.logger.info(f"Registering model '{self.args.model}' from {best_model_path}")
-            # Load the best model's weights before registration
             self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+
+            # --- Infer Model Signature ---
+            # Create a dummy input tensor with the correct shape and type
+            # The batch size (e.g., 1) doesn't matter for signature inference
+            input_sample = torch.randn(1, self.args.feature_size * 2).to(self.device)
+            # Get a prediction to infer the output signature
+            output_sample = self.model(input_sample)
+            # Infer the signature
+            from mlflow.models.signature import infer_signature
+            signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
+            self.logger.info("Model signature inferred successfully.")
             
-            # Use mlflow.pytorch.log_model for registration
+            # Use mlflow.pytorch.log_model for registration, now with signature
+            # --- MLflow Artifacts & Model Registration ---
+        self.logger.info("Logging artifacts and registering model to MLflow...")
+
+        # 1. Log plots as artifacts
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'loss_curve.pdf'))
+        mlflow.log_artifact(os.path.join(self.args.run_dir, 'lr_curve.pdf'))
+
+        # 2. Register the BEST model to the MLflow Model Registry
+        best_model_path = os.path.join(chechpoint_path, 'best.pth')
+        if os.path.exists(best_model_path):
+            self.logger.info(f"Registering best model '{self.args.model}' from {best_model_path}")
+            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+            from mlflow.models.signature import infer_signature
+            input_sample = torch.randn(1, self.args.feature_size * 2).to(self.device)
+            output_sample = self.model(input_sample)
+            signature = infer_signature(input_sample.cpu().numpy(), output_sample.detach().cpu().numpy())
             mlflow.pytorch.log_model(
                 pytorch_model=self.model,
-                artifact_path="model",  # Subdirectory within the run's artifacts
-                registered_model_name=self.args.model  # This is the key for registration
+                name="model",  # <-- Updated from artifact_path to name as per warning
+                registered_model_name=self.args.model,
+                signature=signature
             )
-            self.logger.info(f"Model '{self.args.model}' registered successfully.")
+            self.logger.info(f"Best model '{self.args.model}' registered successfully.")
+        else:
+            self.logger.warning(f"Could not find best model at '{best_model_path}' to register.")
+
+        # 3. Additionally, log the LAST model's weights as a simple artifact
+        last_model_path = os.path.join(chechpoint_path, 'last.pth')
+        if os.path.exists(last_model_path):
+            mlflow.log_artifact(last_model_path, artifact_path="checkpoints")
+            self.logger.info(f"Last model weights saved to MLflow artifacts under 'checkpoints/'.")
+
+        # 4. End the MLflow run
+        if mlflow.end_run():
+            self.logger.info(f"Model '{self.args.model}' registered successfully with signature.")
         else:
             self.logger.warning(f"Could not find best model at '{best_model_path}' to register.")
 

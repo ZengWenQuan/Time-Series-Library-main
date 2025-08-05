@@ -1,0 +1,86 @@
+# FreqInceptionConvNet 配置文件
+
+# 1. 全局设置
+global_settings:
+  use_batch_norm: True
+
+# 2. 频率分支配置 (FrequencyBranch) - 采用混合专家 (MoE) 架构
+frequency_branch:
+  # 方案一的配置：是否使用窗口化和幅位/相位分解
+  use_windowing: True
+
+  # 混合专家 (MoE) 配置
+  moe:
+    num_experts: 16  # 总共8个专家CNN
+    top_k: 4        # 每次选择2个专家
+    aux_loss_factor: 0.01 # 负载均衡损失的权重因子
+
+  # 单个CNN专家网络 (Expert) 的架构配置
+  expert_cnn_config:
+    - {out_channels: 16, kernel_size: 7, stride: 2, padding: 3}
+    - {out_channels: 32, kernel_size: 5, stride: 2, padding: 2}
+    - {out_channels: 64, kernel_size: 3, stride: 2, padding: 1}
+
+  # 新增：深度卷积门控 (Deep Conv Gating) 配置
+  deep_conv_gating_config:
+    # 卷积层的输出通道数列表
+    conv_out_channels: [8, 16]
+    # 卷积核大小
+    kernel_size: 5
+    # 最终MLP的隐藏层维度
+    mlp_hidden_dim: 128
+    dropout: 0.2
+
+# 3. Inception分支配置 (InceptionBranch) - 沙漏结构
+inception_branch:
+  upsampling_conv_transpose:
+    out_channels: 16
+    kernel_size: 4
+    stride: 2
+    padding: 1
+  
+  blocks:
+    - out_channels_per_path: {3: 32, 5: 32, 7: 32}
+      channel_attention_reduction: 16
+      pool_size: 3
+    - out_channels_per_path: {3: 64, 5: 64, 7: 64}
+      channel_attention_reduction: 16
+      pool_size: 3
+
+# 4. 特征融合模块配置
+fusion_module:
+  dropout: 0.3
+  # 新增：定义两个分支融合前需要调整到的统一序列长度
+  output_seq_len: 128
+
+# 5. 新增：卷积序列模块配置 (ConvSequenceModule)
+# 处理融合后的序列
+conv_sequence_module:
+  conv_layers:
+    # 示例：两层卷积，最终将序列通过全局池化压缩为单个向量
+    - {out_channels: 128, kernel_size: 5, stride: 1, padding: 2, pool_size: 2}
+    - {out_channels: 256, kernel_size: 3, stride: 1, padding: 1, pool_size: 2}
+
+# 6. 预测头配置 (Prediction Head)
+prediction_head:
+  # 选择预测头类型: 'multi_head' 或 'probabilistic'
+  head_type: 'multi_head' # <-- 在此切换方案
+
+  # --- 方案二：多头预测 (Multi-Head Prediction) 配置 ---
+  multi_head_config:
+    dropout: 0.3
+    head_hidden_dims:
+      Teff: [128, 64]
+      logg: [128, 64]
+      FeH: [128, 64]  # 修正：将 M_H 改为 FeH 以匹配数据
+      CFe: [128, 64]
+
+  # --- 方案三：概率预测 (Probabilistic Prediction) 配置 ---
+  probabilistic_config:
+    hidden_dims: [256, 128]
+    dropout: 0.3
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'

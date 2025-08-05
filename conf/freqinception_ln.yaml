@@ -19,7 +19,7 @@ normalization_settings:
 # 任务与数据维度配置
 # ===============================================
 task_name: 'spectral_prediction'
-feature_size: 2000
+feature_size: 4700
 label_size: 4
 
 # ===============================================
