@@ -48,8 +48,10 @@ echo "Checkpoints will be saved to: $CHECKPOINT_PATH"
 python -u run.py \
   --task_name spectral_prediction \
   --is_training 1 \
-  --root_path ./dataset/spectral/ \
-  --data_path $DATA_PATH \
+  --split_data_path ./dataset/split_data \
+  --continuum_filename continuum.csv \
+  --normalized_filename normalized.csv \
+  --labels_filename labels.csv \
   --model_id "${DATA_NAME}_${RUN_ID}" \
   --model $MODEL_NAME \
   --data $DATA_NAME \

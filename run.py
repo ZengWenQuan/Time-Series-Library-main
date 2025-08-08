@@ -213,6 +213,12 @@ if __name__ == '__main__':
     parser.add_argument('--spectra_normalized_path', type=str, default='final_spectra_normalized.csv', help='path to the spectra normalized file')
     parser.add_argument('--label_path', type=str, default='removed_with_rv.csv', help='path to the label file')
 
+    # pre-split data arguments
+    parser.add_argument('--split_data_path', type=str, default=None, help='Path to the directory of pre-split data.')
+    parser.add_argument('--continuum_filename', type=str, default='features_continuum.csv', help='Filename template for continuum spectra.')
+    parser.add_argument('--normalized_filename', type=str, default='features_normalized.csv', help='Filename template for normalized spectra.')
+    parser.add_argument('--labels_filename', type=str, default='labels.csv', help='Filename template for labels.')
+
     args = parser.parse_args()
     
     # 设置随机种子

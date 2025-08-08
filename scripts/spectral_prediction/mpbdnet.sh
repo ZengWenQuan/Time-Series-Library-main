@@ -5,10 +5,10 @@
 python -u run.py \
   --task_name spectral_prediction \
   --is_training 1 \
-  --root_path ./dataset/spectral/ \
-  --spectra_continuum_path final_spectra_continuum.csv \
-  --spectra_normalized_path final_spectra_normalized.csv \
-  --label_path removed_with_rv.csv \
+  --split_data_path ./dataset/split_data \
+  --continuum_filename continuum.csv \
+  --normalized_filename normalized.csv \
+  --labels_filename labels.csv \
   --stats_path conf/stats.yaml \
   \
   --model_id SpectralMPBDNet_spectral \

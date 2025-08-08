@@ -69,3 +69,8 @@ sequence_module:
 prediction_head:
   hidden_dims: [512, 256]
   dropout: 0.3
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'

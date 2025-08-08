@@ -122,7 +122,55 @@ class Dataset_Spectral(Dataset):
         self.feature_scaler = feature_scaler
         self.label_scaler = label_scaler
         
-        self.__read_data__()
+        if args.split_data_path:
+            self.__read_split_data__()
+        else:
+            self.__read_data__()
+
+    def __read_split_data__(self):
+        # Load the datasets from split files
+        data_path = os.path.join(self.args.split_data_path, self.flag)
+        
+        continuum_path = os.path.join(data_path, self.args.continuum_filename)
+        normalized_path = os.path.join(data_path, self.args.normalized_filename)
+        labels_path = os.path.join(data_path, self.args.labels_filename)
+
+        features_continuum_df = pd.read_csv(continuum_path, dtype={'obsid': 'int64'})
+        features_normalized_df = pd.read_csv(normalized_path, dtype={'obsid': 'int64'})
+        labels_df = pd.read_csv(labels_path, dtype={'obsid': 'int64'})
+
+        # Get feature and target columns based on feature_size
+        feature_cols_continuum = features_continuum_df.columns[1:self.feature_size+1]
+        feature_cols_normalized = features_normalized_df.columns[1:self.feature_size+1]
+
+        # Separate feature sets
+        data_x_continuum = features_continuum_df[feature_cols_continuum].values
+        data_x_normalized = features_normalized_df[feature_cols_normalized].values
+
+        # Apply clipping to normalized spectra data
+        data_x_normalized = np.clip(data_x_normalized, -1, 3)
+
+        data_y = labels_df[self.targets].values
+        
+        # Transform only the continuum features
+        if self.feature_scaler:
+            data_x_continuum_scaled = self.feature_scaler.transform(data_x_continuum)
+        else:
+            raise ValueError("Feature scaler not provided for continuum")
+        
+        # Concatenate scaled continuum features with the original normalized features
+        data_x = np.concatenate((data_x_continuum_scaled, data_x_normalized), axis=1)
+
+        # Transform labels if a scaler is provided
+        if self.label_scaler:
+            data_y_scaled = self.label_scaler.transform(data_y)
+        else:
+            raise ValueError("Label scaler not provided")
+        
+        self.data_x = data_x
+        self.data_y = data_y_scaled
+        self.obsids = labels_df['obsid'].values
+        self.raw_data_y = data_y
 
     def __read_data__(self):
         # Load the datasets

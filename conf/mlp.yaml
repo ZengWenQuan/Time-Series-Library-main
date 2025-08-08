@@ -27,3 +27,8 @@ architecture:
     rate: 0.1
 
 # The final output layer is added automatically based on `label_size`
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'

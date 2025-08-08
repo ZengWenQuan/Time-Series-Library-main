@@ -473,7 +473,8 @@ class Exp_Spectral_Prediction(Exp_Basic):
             torch.save(self.model.state_dict(), last_model_path_for_artifact)
             mlflow.log_artifact(last_model_path_for_artifact, artifact_path="checkpoints")
 
-            adjust_learning_rate(model_optim, epoch + 1, self.args)
+            if scheduler is not None:
+                scheduler.step()
             
         last_model_path = chechpoint_path + '/' + 'last.pth'
         torch.save(self.model.state_dict(), last_model_path)

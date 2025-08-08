@@ -134,6 +134,11 @@ training:
   patience: 15
   min_delta: 1e-6
 
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'
+
 # ===============================================
 # 高级配置选项
 # ===============================================

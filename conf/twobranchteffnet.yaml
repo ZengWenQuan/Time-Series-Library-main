@@ -29,3 +29,25 @@ cross_attention:
 final_head_mlp:
   hidden_dims: [256, 128]
   dropout: 0.3
+
+
+# MLP head for the initial Teff prediction
+teff_head_mlp:
+  hidden_dims: [256, 128]
+  dropout: 0.3
+
+
+# --- Training Hyperparameters ---
+training:
+  learning_rate: 0.0001
+  weight_decay: 1e-5
+  # Loss weights for combining the two branch losses
+  # loss = teff_loss_weight * teff_loss + other_params_loss_weight * other_params_loss
+  loss_weights:
+    teff_loss_weight: 0.6
+    other_params_loss_weight: 0.4
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'

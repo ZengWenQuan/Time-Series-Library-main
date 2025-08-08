@@ -5,3 +5,8 @@ use_attention: True
 attention_reduction: 8
 fc_hidden_dims: [256, 128]
 dropout: 0.1
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'

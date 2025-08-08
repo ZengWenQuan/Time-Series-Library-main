@@ -15,3 +15,8 @@ rnn_hidden_size: 128
 
 # A list defining the hidden neuron counts for the final fully-connected layers.
 fc_hidden_dims: [256, 128]
+
+# 7. 新增：训练设置
+training_settings:
+  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
+  loss_function: 'l1'
