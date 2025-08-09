@@ -3,8 +3,7 @@ from exp.exp_basic import Exp_Basic
 from models.spectral_prediction import DualBranchMoENet
 
 from utils.tools import EarlyStopping
-from utils.stellar_metrics import calculate_metrics, format_metrics
-from utils.stellar_metrics import save_regression_metrics
+from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, save_feh_classification_metrics, save_history_plot,save_feh_classification_metrics,calculate_feh_classification_metrics
 from utils.losses import RegressionFocalLoss ,GaussianNLLLoss
 import numpy as np
 import torch
@@ -194,7 +193,6 @@ class Exp_Spectral_Prediction(Exp_Basic):
         mlflow.start_run(run_name=f"{self.args.model}_{self.args.model_id}")
         mlflow.log_params(vars(self.args))
 
-
         chechpoint_path=self.args.run_dir+'/'+'checkpoints'
         if not os.path.exists(chechpoint_path):
             os.makedirs(chechpoint_path)
@@ -234,7 +232,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
 
         from mlflow.models.signature import infer_signature
         signature = infer_signature(input_signature_data, output_sample.detach().cpu().numpy())
-        self.logger.info("成功推断出包含两个输入的模型签名。")
+        self.logger.info("成功推断出包含两个输入的模型签名。 সন")
 
         history_train_loss = []
         history_vali_loss = []
@@ -335,12 +333,45 @@ class Exp_Spectral_Prediction(Exp_Basic):
             metrics_dict_vali = calculate_metrics(vali_preds, vali_trues, self.args.targets)
             if self.test_data is not None:
                 metrics_dict_test = calculate_metrics(test_preds, test_trues, self.args.targets)
+
+            # --- ADDED CODE START ---
+            # 1. Conditionally print detailed metrics based on interval
+            if (epoch + 1) % self.args.vali_interval == 0:
+                self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
+                if self.vali_data:
+                    self.logger.info(f"Validation Metrics:\n{format_metrics(metrics_dict_vali)}")
+                if self.test_data is not None:
+                    self.logger.info(f"Test Metrics:\n{format_metrics(metrics_dict_test)}")
+            
+            # 2. Save latest metrics to files every epoch
+            save_regression_metrics(metrics_dict_vali, self.args.run_dir+'/metrics/latest', self.args.targets, phase="val")
+            if self.test_data is not None:
+                save_regression_metrics(metrics_dict_test, self.args.run_dir+'/metrics/latest', self.args.targets, phase="test")
+            # --- ADDED: Save latest classification metrics ---
+            class_metrics_vali = calculate_feh_classification_metrics(vali_preds, vali_trues, self.args.feh_index)
+            save_feh_classification_metrics(class_metrics_vali, self.args.run_dir+'/metrics/latest', phase="val")
+            if self.test_data is not None:
+                class_metrics_test = calculate_feh_classification_metrics(test_preds, test_trues, self.args.feh_index)
+                save_feh_classification_metrics(class_metrics_test, self.args.run_dir+'/metrics/latest', phase="test")
+            # --- ADDED CODE END ---
                 
             prev_best_loss = early_stopping.val_loss_min
             early_stopping(vali_loss, self.model, chechpoint_path)
             if vali_loss < prev_best_loss:
                 best_model_path = os.path.join(chechpoint_path, 'best.pth')
                 self.logger.info(f"Validation loss improved. Logging new best model to{best_model_path} ")
+                # --- ADDED CODE START ---
+                # 3. Save best metrics to files
+                self.logger.info("Saving best metrics to files...")
+                save_regression_metrics(metrics_dict_vali, self.args.run_dir+'/metrics/best', self.args.targets, phase="val")
+                if self.test_data is not None:
+                    save_regression_metrics(metrics_dict_test, self.args.run_dir+'/metrics/best', self.args.targets, phase="test")
+                # --- ADDED: Save best classification metrics ---
+                # Note: metrics were already calculated for the 'latest' save, so we reuse them here.
+                save_feh_classification_metrics(class_metrics_vali, self.args.run_dir+'/metrics/best', phase="val")
+                if self.test_data is not None:
+                    save_feh_classification_metrics(class_metrics_test, self.args.run_dir+'/metrics/best', phase="test")
+                # --- ADDED CODE END ---
                 torch.save(self.model.state_dict(), best_model_path)
 
             latest_model_path = os.path.join(chechpoint_path, 'latest.pth')
@@ -363,6 +394,12 @@ class Exp_Spectral_Prediction(Exp_Basic):
                     if 'mae' in metric_name.lower():
                         mlflow.log_metric(f'test_{metric_name}', metric_value, step=epoch)
 
+            # --- ADDED: Update and save history plot every epoch ---
+            save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir)
+
+            # --- ADDED: Update and save history plot every epoch ---
+            save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir)
+
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -379,7 +416,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
     def test(self, test=0):
         if test:
             print('loading model')
-            self.model.load_state_dict(torch.load(os.path.join(self.args.run_dir, 'checkpoints', 'checkpoint.pth')))
+            self.model.load_state_dict(torch.load(os.path.join(self.args.run_dir, 'checkpoints', 'best.pth')))
 
         preds = []
         trues = []

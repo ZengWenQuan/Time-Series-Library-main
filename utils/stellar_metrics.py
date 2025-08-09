@@ -662,3 +662,51 @@ def save_feh_classification_metrics(metrics_dict, save_dir, phase="test"):
         plt.tight_layout()
         plt.savefig(os.path.join(classification_dir, 'feh_prediction_vs_truth.pdf'))
         plt.close(fig)
+
+
+def save_history_plot(train_loss, val_loss, lr_history, save_dir):
+    """
+    绘制并保存训练过程中的损失和学习率变化图。
+
+    Args:
+        train_loss (list): 包含每个epoch训练损失的列表。
+        val_loss (list): 包含每个epoch验证损失的列表。
+        lr_history (list): 包含每个epoch学习率的列表。
+        save_dir (str): 保存图表的目录。
+    """
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    epochs = range(1, len(train_loss) + 1)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+
+    # Subplot 1: Loss
+    ax1.plot(epochs, train_loss, 'b-o', label='Train Loss', markersize=4)
+    # 处理验证可能不是每个epoch都运行的情况
+    val_epochs = [i for i, v in enumerate(val_loss, 1) if v is not None]
+    val_loss_points = [v for v in val_loss if v is not None]
+    ax1.plot(val_epochs, val_loss_points, 'r-s', label='Validation Loss', markersize=4)
+    ax1.set_ylabel('Loss')
+    ax1.set_title('Training and Validation Loss')
+    ax1.legend()
+    ax1.grid(True, linestyle='--', alpha=0.6)
+
+    # Subplot 2: Learning Rate
+    ax2.plot(epochs, lr_history, 'g-^', label='Learning Rate', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Learning Rate')
+    ax2.set_title('Learning Rate Schedule')
+    ax2.legend()
+    ax2.grid(True, linestyle='--', alpha=0.6)
+    
+    # 如果学习率变化范围大，使用对数坐标
+    lr_values = [lr for lr in lr_history if lr is not None and lr > 0]
+    if lr_values and max(lr_values) / min(lr_values) > 10:
+        ax2.set_yscale('log')
+
+    plt.tight_layout()
+    save_path = os.path.join(save_dir, 'training_history.pdf')
+    plt.savefig(save_path)
+    plt.close(fig)
+    #print(f"Training history plot saved to {save_path}")
