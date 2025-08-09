@@ -182,11 +182,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
         self.train_data, self.train_loader = data_provider(args=self.args,flag='train', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
         self.vali_data, self.vali_loader = data_provider(args=self.args,flag='val', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
 
-        if self.args.split_ratio[2] > 0:
-            self.test_data, self.test_loader = data_provider(args=self.args,flag='test', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-        else:
-            self.logger.info("Test ratio is 0, skipping test set loading and evaluation.")
-            self.test_data, self.test_loader = None, None
+        self.test_data, self.test_loader = data_provider(args=self.args,flag='test', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
     def train(self):
         # --- MLflow Setup ---
         mlflow.set_experiment(self.args.task_name)
@@ -345,14 +341,14 @@ class Exp_Spectral_Prediction(Exp_Basic):
             
             # 2. Save latest metrics to files every epoch
             save_regression_metrics(metrics_dict_vali, self.args.run_dir+'/metrics/latest', self.args.targets, phase="val")
-            if self.test_data is not None:
-                save_regression_metrics(metrics_dict_test, self.args.run_dir+'/metrics/latest', self.args.targets, phase="test")
+            save_regression_metrics(metrics_dict_test, self.args.run_dir+'/metrics/latest', self.args.targets, phase="test")
+           
+           
             # --- ADDED: Save latest classification metrics ---
             class_metrics_vali = calculate_feh_classification_metrics(vali_preds, vali_trues, self.args.feh_index)
             save_feh_classification_metrics(class_metrics_vali, self.args.run_dir+'/metrics/latest', phase="val")
-            if self.test_data is not None:
-                class_metrics_test = calculate_feh_classification_metrics(test_preds, test_trues, self.args.feh_index)
-                save_feh_classification_metrics(class_metrics_test, self.args.run_dir+'/metrics/latest', phase="test")
+            class_metrics_test = calculate_feh_classification_metrics(test_preds, test_trues, self.args.feh_index)
+            save_feh_classification_metrics(class_metrics_test, self.args.run_dir+'/metrics/latest', phase="test")
             # --- ADDED CODE END ---
                 
             prev_best_loss = early_stopping.val_loss_min
