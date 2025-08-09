@@ -5,4 +5,4 @@ from .spectral_prediction.MPBDNet_spetral import MPBDNet_spetral
 from .spectral_prediction.SpectralMPBDNet import SpectralMPBDNet
 from .spectral_prediction.TwoBranchTeffNet import TwoBranchTeffNet
 from .spectral_prediction.DualPyramidNet import DualPyramidNet
-from .spectral_prediction.FreqInceptionConvNet import FreqInceptionConvNet
+from .spectral_prediction import FreqInceptionLNet, FreqInceptionConvNet, FreqInceptionNet, MLP, SpectralMPBDNet, TwoBranchTeffNet, DualPyramidNet, DualSpectralNet, DualBranchMoENet

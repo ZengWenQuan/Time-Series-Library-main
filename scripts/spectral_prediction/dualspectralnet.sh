@@ -79,10 +79,11 @@ python -u run.py \
   --model_id "${MODEL_ID}" \
   --model "${MODEL_NAME}" \
   --data "${DATA_NAME}" \
-  --split_data_path ./dataset/split_data \
-  --continuum_filename continuum.csv \
-  --normalized_filename normalized.csv \
-  --labels_filename labels.csv \
+  --root_path "${ROOT_PATH}" \
+  --data_path "${DATA_PATH}" \
+  --spectra_continuum_path "${SPECTRA_CONTINUUM_PATH}" \
+  --spectra_normalized_path "${SPECTRA_NORMALIZED_PATH}" \
+  --label_path "${LABEL_PATH}" \
   --feature_size ${FEATURE_SIZE} \
   --label_size ${LABEL_SIZE} \
   --model_conf "${MODEL_CONF}" \

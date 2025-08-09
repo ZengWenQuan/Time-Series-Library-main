@@ -6,3 +6,4 @@ from .TwoBranchTeffNet import *
 from .mspdownsample import *
 from .DualSpectralNet import *
 from .FreqInceptionLNet import *
+from .DualBranchMoENet import *

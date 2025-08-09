@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from utils.losses import RegressionFocalLoss
+import logging
 
 # --- Model Registration Mechanism ---
 MODEL_REGISTRY = {}
@@ -33,6 +34,20 @@ class Exp_Basic(object):
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
+        
+        info_model=self.args.run_dir+'/model.txt'
+        with open(info_model,'w') as f:
+            # 写入模型结构
+            f.write("模型结构:\n")
+            f.write(f"{model}\n\n")
+            
+            # 写入每层参数数量
+            f.write("每层参数数量:\n")
+            sum_param=0
+            for name, param in model.named_parameters():                
+                f.write(f"  {name}: {param.numel():,} 参数\n")
+                sum_param+=param.numel()
+            f.write(f'总参数量：{sum_param}')
         return model
 
     def _acquire_device(self):
@@ -92,3 +107,33 @@ class Exp_Basic(object):
         else:
             print(f"警告: 未知的损失函数 '{self.args.loss}'，使用默认的MSE损失")
             return nn.MSELoss()
+        
+    def _setup_logger(self):
+        import datetime
+        # Prevent the logger from propagating to the root logger 
+        self.logger = logging.getLogger('CEMP_search')        
+        self.logger.setLevel(logging.INFO)   
+        self.logger.propagate = False
+        
+        # 获取当前北京时间
+        beijing_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+        time_str = beijing_time.strftime('%Y-%m-%d %H:%M')
+        
+        # Formatter        
+        formatter = logging.Formatter(f'CEMP search - {time_str} - %(message)s')
+        
+        # File Handler        
+        log_file = os.path.join(self.args.run_dir, 'training.log')        
+        file_handler = logging.FileHandler(log_file)        
+        file_handler.setLevel(logging.INFO)        
+        file_handler.setFormatter(formatter)
+        
+        # Stream Handler (for console output)        
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)        
+        stream_handler.setFormatter(formatter)
+        
+        # Add handlers to the logger        
+        if not self.logger.handlers:            
+            self.logger.addHandler(file_handler)            
+            self.logger.addHandler(stream_handler)    

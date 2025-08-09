@@ -58,6 +58,10 @@ if __name__ == '__main__':
                         help='dataset type')
     parser.add_argument('--root_path', type=str, default='./dataset/spectral/', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='spectral_data.csv', help='data file')
+    parser.add_argument('--split_data_path', type=str, default='./dataset/split_data', help='path to the split data directory')
+    parser.add_argument('--continuum_filename', type=str, default='continuum.csv', help='filename for the continuum spectra data')
+    parser.add_argument('--normalized_filename', type=str, default='normalized.csv', help='filename for the normalized spectra data')
+    parser.add_argument('--labels_filename', type=str, default='labels.csv', help='filename for the labels data')
     parser.add_argument('--plot_loss', type=bool, default=False, help='whether to plot the loss')
     parser.add_argument('--features', type=str, default='M',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
@@ -67,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--feature_size', type=int, default=4802, help='feature size')
+    parser.add_argument('--feature_size', type=int, default=4798, help='feature size for EACH input branch (continuum and normalized)')
     parser.add_argument('--label_size', type=int, default=4, help='label size')
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=48, help='start token length')
@@ -213,12 +217,6 @@ if __name__ == '__main__':
     parser.add_argument('--spectra_normalized_path', type=str, default='final_spectra_normalized.csv', help='path to the spectra normalized file')
     parser.add_argument('--label_path', type=str, default='removed_with_rv.csv', help='path to the label file')
 
-    # pre-split data arguments
-    parser.add_argument('--split_data_path', type=str, default=None, help='Path to the directory of pre-split data.')
-    parser.add_argument('--continuum_filename', type=str, default='features_continuum.csv', help='Filename template for continuum spectra.')
-    parser.add_argument('--normalized_filename', type=str, default='features_normalized.csv', help='Filename template for normalized spectra.')
-    parser.add_argument('--labels_filename', type=str, default='labels.csv', help='Filename template for labels.')
-
     args = parser.parse_args()
     
     # 设置随机种子
@@ -271,11 +269,6 @@ if __name__ == '__main__':
     elif args.task_name == 'regression':
         Exp = Exp_Regression
     elif args.task_name == 'spectral_prediction':
-        if args.model == 'DualPyramidNet':
-            Exp = Exp_DualPyramidNet
-        elif args.model == 'DualSpectralNet':
-            Exp = Exp_DualSpectralNet
-        else:
             Exp = Exp_Spectral_Prediction
     else:
         Exp = Exp_Long_Term_Forecast
@@ -364,7 +357,7 @@ if __name__ == '__main__':
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp = Exp(args)  # 设置实验
-            exp.train(setting)
+            exp.train()
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)

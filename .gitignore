@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 test_sctrp.ipynb
-.claude/
 # C extensions
 *.so
 runs/
