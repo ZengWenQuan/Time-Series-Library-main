@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from sklearn.preprocessing import StandardScaler
 import random
 
 class Dataset_Spectral(Dataset):

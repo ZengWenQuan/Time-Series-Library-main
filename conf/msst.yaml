@@ -1,0 +1,39 @@
+
+# MultiScaleSpectralTransformer (MSST) 配置文件
+
+# --- 训练设置 ---
+training_settings:
+  loss_function: 'mse'
+  mixed_precision: True
+
+# --- 连续谱处理分支 (简单CNN) ---
+continuum_cnn_branch:
+  - {out_channels: 32, kernel_size: 7, pool_size: 4}
+  - {out_channels: 64, kernel_size: 5, pool_size: 4}
+
+# --- 归一化谱处理分支 (核心模块) ---
+normalized_msst_branch:
+  # 局部特征CNN子路径
+  cnn_path:
+    - {out_channels: 32, kernel_size: 5, pool_size: 4}
+    - {out_channels: 64, kernel_size: 3, pool_size: 4}
+
+  # 全局特征Transformer子路径
+  transformer_path:
+    patch_len: 16       # 注意: feature_size 必须能被 patch_len 整除
+    d_model: 128        # Transformer 的模型维度
+    n_head: 8           # 多头注意力的头数
+    n_layers: 3         # Transformer Encoder 的层数
+    d_ff: 256           # 前馈网络的隐藏层维度
+    dropout: 0.1
+
+  # 频域特征FFT子路径
+  fft_path:
+    mlp_layers: [128, 64] # FFT输出后接的MLP层维度
+
+# --- 融合头配置 (用于最终预测) ---
+fusion_head:
+  # 输入维度将由代码动态计算
+  - {out_features: 512, dropout: 0.3}
+  - {out_features: 256, dropout: 0.2}
+  - {out_features: 4, is_output_layer: True} # 输出4个恒星参数
