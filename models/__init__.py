@@ -7,4 +7,5 @@ from .spectral_prediction.TwoBranchTeffNet import TwoBranchTeffNet
 from .spectral_prediction.DualPyramidNet import DualPyramidNet
 from .spectral_prediction.MultiScaleSpectralTransformer import MultiScaleSpectralTransformer
 from .spectral_prediction.CustomFusionNet import CustomFusionNet
+from .spectral_prediction.LargeKernelConvNet import LargeKernelConvNet
 from .spectral_prediction import FreqInceptionLNet, FreqInceptionConvNet, FreqInceptionNet, MLP, SpectralMPBDNet, TwoBranchTeffNet, DualPyramidNet, DualSpectralNet, DualBranchMoENet

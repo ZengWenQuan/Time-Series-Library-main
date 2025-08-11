@@ -1,0 +1,34 @@
+
+# LargeKernelConvNet 配置文件
+
+# --- 训练设置 ---
+training_settings:
+  loss_function: 'mse'
+  mixed_precision: True
+
+# --- 分支一：超大核卷积分支 (处理连续谱) ---
+large_kernel_branch:
+  kernel_size: 128
+  stride: 16
+  out_channels: 64
+  fc_dim: 64
+
+# --- 分支二：上采样+多尺度分支 (处理归一化谱或回归任务) ---
+upsample_branch:
+  upsample_kernel: 4
+  pyramid_channels: [16, 32, 64]
+  kernel_sizes: [3, 5, 9]
+  pool_size: 2
+  batch_norm: false
+  use_attention: true
+  attention_reduction: 4
+
+# --- Bi-LSTM 配置 ---
+bilstm_head:
+  lstm_hidden_dim: 256
+  lstm_layers: 2
+  dropout: 0.3
+
+# --- 预测头配置 ---
+prediction_head:
+  hidden_layers: [128, 64]

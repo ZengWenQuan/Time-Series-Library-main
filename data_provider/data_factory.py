@@ -27,7 +27,7 @@ data_dict = {
     'SMD': SMDSegLoader,
     'SWAT': SWATSegLoader,
     'UEA': UEAloader,
-    'stellar': Dataset_Steller,
+    'steller': Dataset_Steller,
     'spectral': Dataset_Spectral
 }
 

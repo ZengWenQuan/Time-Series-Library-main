@@ -1,14 +1,13 @@
-
-# CustomFusionNet 配置文件 (v3, 采用MSPNet结构)
+# CustomFusionNet 配置文件 (v4, 归一化谱分支采用MSPNet结构, 连续谱分支采用小波变换)
 
 # --- 训练设置 ---
 training_settings:
   loss_function: 'mse'
   mixed_precision: True
 
-# --- 归一化谱分支 (模仿MSPNet结构) ---
+# --- 归一化谱处理分支 (模仿MSPNet结构) ---
 normalized_branch:
-  # 金字塔每层的输出通道数(注意：不是每个并行路径的通道数)
+  # 金字塔每层的输出通道数(注意：这是指每个并行路径的输出通道数)
   pyramid_channels: [16, 32, 64]
   # 三个并行分支的卷积核大小
   kernel_sizes: [3, 5, 9]
@@ -21,9 +20,16 @@ normalized_branch:
   # 注意力机制的通道压缩比
   attention_reduction: 4
 
-# --- 连续谱频域分支 ---
-continuum_freq_branch:
-  mlp_layers: [512, 256]
+# --- 连续谱频域分支 (使用小波变换) ---
+continuum_wavelet_branch:
+  wavelet_name: 'db4'     # 小波基函数名称, e.g., 'db1', 'coif1', etc.
+  wavelet_levels: 4       # 小波分解的层数
+  batch_norm: false       # 是否在CNN中使用批归一化
+  cnn:
+    layers:
+      # 每个字典定义一个 Inception 块 + 池化层
+      - {out_channels_per_path: 16, pool_size: 2}
+      - {out_channels_per_path: 32, pool_size: 2}
 
 # --- 融合模块与LSTM配置 ---
 fusion:

@@ -298,9 +298,9 @@ class Exp_Basic(object):
             mlflow.log_artifacts(save_dir, artifact_path="test_results")
 
     def _select_criterion(self):
-        if not hasattr(self.args, 'loss') or self.args.loss == 'MSE':
+        if not hasattr(self.args, 'loss') or self.args.loss == 'Mse' or self.args.loss == 'l2' :
             return nn.MSELoss()
-        elif self.args.loss == 'MAE' or self.args.loss =='l1':
+        elif self.args.loss == 'Mae' or self.args.loss =='l1':
             return nn.L1Loss()
         elif self.args.loss == 'SmoothL1':
             return nn.SmoothL1Loss()
