@@ -143,8 +143,9 @@ class Exp_Basic(object):
         mlflow.log_param("loss_function", criterion.__class__.__name__)
 
         history_train_loss, history_vali_loss, history_lr = [], [], []
-
+        epoch_time=time.time()
         for epoch in range(self.args.train_epochs):
+            epoch_grad_norms = [] #<-- ADDED
             self.model.train()
             train_loss = []
             for i, (batch_x, batch_y, batch_obsid) in enumerate(self.train_loader):
@@ -154,6 +155,9 @@ class Exp_Basic(object):
                     
                 loss = criterion(outputs, batch_y.float().to(self.device))
                 loss.backward()
+                # --- ADDED: Clip and record gradient norm ---
+                grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                epoch_grad_norms.append(grad_norm.item())
                 model_optim.step()
                 train_loss.append(loss.item())
 
@@ -176,10 +180,21 @@ class Exp_Basic(object):
                 combined_reg_metrics = self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "latest")
 
             # --- Logging and History ---
+            avg_grad_norm = np.mean(epoch_grad_norms)
+            cost_time = time.time() - epoch_time
+            remaining_time = cost_time * (self.args.train_epochs - epoch - 1)
+            
+            cost_mins, cost_secs = divmod(int(cost_time), 60)
+            rem_hrs, rem_rest = divmod(int(remaining_time), 3600)
+            rem_mins, rem_secs = divmod(rem_rest, 60)
+
             current_lr = model_optim.param_groups[0]['lr']
             history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
+            
             log_msg = f"Epoch: {epoch + 1} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
+            log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
+            log_msg += f" | Time: {cost_mins}m {cost_secs}s | ETA: {rem_hrs}h {rem_mins}m {rem_secs}s"
             self.logger.info(log_msg)
             
             # --- Log to MLflow ---
