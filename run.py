@@ -61,7 +61,9 @@ if __name__ == '__main__':
     parser.add_argument('--split_data_path', type=str, default='./dataset/split_data', help='path to the split data directory')
     parser.add_argument('--continuum_filename', type=str, default='continuum.csv', help='filename for the continuum spectra data')
     parser.add_argument('--normalized_filename', type=str, default='normalized.csv', help='filename for the normalized spectra data')
-    parser.add_argument('--labels_filename', type=str, default='labels.csv', help='filename for the labels data')
+    parser.add_argument('--labels_filename', type=str, default='labels.csv', help='data file for labels')
+    parser.add_argument('--feature_filename', type=str, default='features.csv', help='data file for features')
+    parser.add_argument('--show_stats', action='store_true', help='whether to show statistics of data during loading')
     parser.add_argument('--plot_loss', type=bool, default=False, help='whether to plot the loss')
     parser.add_argument('--features', type=str, default='M',
                         help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')

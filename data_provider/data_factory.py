@@ -1,6 +1,6 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4, PSMSegLoader,     MSLSegLoader, SMAPSegLoader, SMDSegLoader, SWATSegLoader, UEAloader
 from data_provider.data_loader_spectral import Dataset_Spectral
-from data_provider.steller import  Dataset_Stellar
+from data_provider.steller import  Dataset_Steller
 from data_provider.uea import collate_fn
 from torch.utils.data import DataLoader
 import numpy as np
@@ -27,7 +27,7 @@ data_dict = {
     'SMD': SMDSegLoader,
     'SWAT': SWATSegLoader,
     'UEA': UEAloader,
-    'stellar': Dataset_Stellar,
+    'stellar': Dataset_Steller,
     'spectral': Dataset_Spectral
 }
 
@@ -78,7 +78,9 @@ def data_provider(args, flag, label_scaler=None, feature_scaler=None):
         # 恒星光谱数据回归任务的特殊处理
         data_set = Data( # 创建数据集对象
             args = args,
-            flag=flag
+            flag=flag,
+            feature_scaler=feature_scaler,
+            label_scaler=label_scaler
         )
         print(flag, len(data_set))
         data_loader = DataLoader( # 创建数据加载器对象

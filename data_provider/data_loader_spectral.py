@@ -85,21 +85,21 @@ class Dataset_Spectral(Dataset):
         print("---------------------------------")
 
     def __getitem__(self, index):
-        seq_x_continuum = self.data_continuum[index]
-        seq_x_normalized = self.data_normalized[index]
+        # 获取对应索引的一维特征向量
+        seq_x_continuum = self.data_continuum[index]  # 形状: (L,)
+        seq_x_normalized = self.data_normalized[index] # 形状: (L,)
+        
+        # 使用 np.stack 将两个 (L,) 的向量合并成一个 (L, 2) 的二维数组
+        x_combined = np.stack([seq_x_continuum, seq_x_normalized], axis=-1)
+
         seq_y = self.data_label[index]
         obsid = self.obsids[index]
 
-        seq_x_continuum = torch.from_numpy(seq_x_continuum).float()
-        seq_x_normalized = torch.from_numpy(seq_x_normalized).float()
+        # 转换为Tensor
+        x_combined = torch.from_numpy(x_combined).float() # 最终形状: [L, 2]
         seq_y = torch.from_numpy(seq_y).float()
-
-        if seq_x_continuum.ndim == 1:
-            seq_x_continuum = seq_x_continuum.unsqueeze(-1)
-        if seq_x_normalized.ndim == 1:
-            seq_x_normalized = seq_x_normalized.unsqueeze(-1)
             
-        return seq_x_continuum, seq_x_normalized, seq_y, obsid
+        return x_combined, seq_y, obsid
 
     def __len__(self):
         return len(self.data_label)

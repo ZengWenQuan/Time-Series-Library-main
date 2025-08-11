@@ -55,6 +55,7 @@ class EarlyStopping:
         self.delta = delta
 
     def __call__(self, val_loss, model, path):
+        torch.save(model.state_dict(), path + '/' + 'last.pth')
         score = -val_loss
         if self.best_score is None:
             self.best_score = score
