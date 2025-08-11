@@ -41,6 +41,11 @@ class Exp_Basic(object):
         
         self.model = self._build_model().to(self.device)
 
+        # --- ADDED: Resume from checkpoint logic ---
+        if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
+            self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
+            self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
+
     def _build_model(self):
         model_class = MODEL_REGISTRY.get(self.args.model)
         if model_class is None:
@@ -214,7 +219,7 @@ class Exp_Basic(object):
             current_lr = model_optim.param_groups[0]['lr']
             history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
             
-            log_msg = f"Epoch: {epoch + 1} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
+            log_msg = f"Epoch: {epoch + 1} /{self.args.train_epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
             log_msg += f" | Time: {cost_mins}m {cost_secs}s | ETA: {rem_hrs}h {rem_mins}m {rem_secs}s"
