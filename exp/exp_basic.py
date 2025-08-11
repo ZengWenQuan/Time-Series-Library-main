@@ -42,9 +42,9 @@ class Exp_Basic(object):
         self.model = self._build_model().to(self.device)
 
         # --- ADDED: Resume from checkpoint logic ---
-        if getattr(self.args, 'checkpoints', None) and os.path.exists(self.args.resume_from):
-            self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
-            self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
+        if getattr(self.args, 'checkpoints', None) and os.path.exists(self.args.checkpoints):
+            self.logger.info(f"Resuming training from checkpoint: {self.args.checkpoints}")
+            self.model.load_state_dict(torch.load(self.args.checkpoints, map_location=self.device))
 
     def _build_model(self):
         model_class = MODEL_REGISTRY.get(self.args.model)
