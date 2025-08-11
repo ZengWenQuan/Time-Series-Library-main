@@ -28,8 +28,18 @@ class Exp_Basic(object):
         self.args = args
         self.targets = args.targets
         self.device = self._acquire_device()
-        self.model = self._build_model().to(self.device)
         self._setup_logger()
+
+        # --- ADDED: Initialize GradScaler for AMP ---
+        self.scaler = None
+        if getattr(args, 'use_amp', False):
+            if self.device.type == 'cuda':
+                self.scaler = torch.amp.GradScaler('cuda')
+                self.logger.info("Automatic Mixed Precision (AMP) enabled.")
+            else:
+                self.logger.warning("AMP is only available on CUDA devices. Disabling AMP.")
+        
+        self.model = self._build_model().to(self.device)
 
     def _build_model(self):
         model_class = MODEL_REGISTRY.get(self.args.model)
@@ -150,15 +160,28 @@ class Exp_Basic(object):
             train_loss = []
             for i, (batch_x, batch_y, batch_obsid) in enumerate(self.train_loader):
                 model_optim.zero_grad()
-                outputs = self.model(batch_x.float().to(self.device))
                 
+                # --- ADDED: AMP Logic ---
+                if self.scaler is not None:
+                    with torch.amp.autocast('cuda'):
+                        outputs = self.model(batch_x.float().to(self.device))
+                        loss = criterion(outputs, batch_y.float().to(self.device))
                     
-                loss = criterion(outputs, batch_y.float().to(self.device))
-                loss.backward()
-                # --- ADDED: Clip and record gradient norm ---
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                    self.scaler.scale(loss).backward()
+                    # 先反缩放，再做梯度裁剪和记录，避免因为缩放因子导致的梯度数值虚高
+                    self.scaler.unscale_(model_optim)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                    self.scaler.step(model_optim)
+                    self.scaler.update()
+                else:
+                    # Standard training
+                    outputs = self.model(batch_x.float().to(self.device))
+                    loss = criterion(outputs, batch_y.float().to(self.device))
+                    loss.backward()
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                    model_optim.step()
+                
                 epoch_grad_norms.append(grad_norm.item())
-                model_optim.step()
                 train_loss.append(loss.item())
 
             # --- Evaluation (Structure preserved as requested) ---
