@@ -1,28 +1,34 @@
-# CustomFusionNet 配置文件 (v2)
+
+# CustomFusionNet 配置文件 (v3, 采用MSPNet结构)
 
 # --- 训练设置 ---
 training_settings:
   loss_function: 'mse'
   mixed_precision: True
 
-# --- 归一化谱分支 (全新多尺度实现) ---
+# --- 归一化谱分支 (模仿MSPNet结构) ---
 normalized_branch:
-  layers:
-    # 每个字典定义一个 Inception 块 + 池化层
-    # out_channels_per_path: 每个并行卷积路径的输出通道数
-    # pool_size: 该块后的最大池化窗口大小，用于下采样
-    - {out_channels_per_path: 16, pool_size: 4} # 输出通道 16*3=48
-    - {out_channels_per_path: 32, pool_size: 4} # 输出通道 32*3=96
-    - {out_channels_per_path: 64, pool_size: 2} # 输出通道 64*3=192
+  # 金字塔每层的输出通道数(注意：不是每个并行路径的通道数)
+  pyramid_channels: [16, 32, 64]
+  # 三个并行分支的卷积核大小
+  kernel_sizes: [3, 5, 9]
+  # 每个金字塔块后的池化大小
+  pool_size: 2
+  # 是否使用批归一化 (根据你的要求，默认为false)
+  batch_norm: false
+  # 是否使用通道注意力机制
+  use_attention: true
+  # 注意力机制的通道压缩比
+  attention_reduction: 4
 
 # --- 连续谱频域分支 ---
 continuum_freq_branch:
-  mlp_layers: [512, 256] # FFT输出后接的MLP层维度
+  mlp_layers: [512, 256]
 
 # --- 融合模块与LSTM配置 ---
 fusion:
-  strategy: 'concat'  # 可选: 'add', 'concat', 'attention'
-  attention_heads: 4    # 仅在 strategy='attention' 时有效
+  strategy: 'concat'      # 可选: 'add', 'concat', 'attention'
+  attention_heads: 4        # 仅在 strategy='attention' 时有效
   lstm_hidden_dim: 256
   lstm_layers: 2
   dropout: 0.3
