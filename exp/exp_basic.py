@@ -298,20 +298,21 @@ class Exp_Basic(object):
             mlflow.log_artifacts(save_dir, artifact_path="test_results")
 
     def _select_criterion(self):
-        if not hasattr(self.args, 'loss') or self.args.loss == 'Mse' or self.args.loss == 'l2' :
+        loss=self.args.loss.lower()
+        if loss == 'Mse' or loss == 'l2' :
             return nn.MSELoss()
-        elif self.args.loss == 'Mae' or self.args.loss =='l1':
+        elif loss == 'Mae' or loss =='l1':
             return nn.L1Loss()
-        elif self.args.loss == 'SmoothL1':
+        elif loss == 'SmoothL1':
             return nn.SmoothL1Loss()
-        elif self.args.loss == 'Huber':
+        elif loss == 'Huber':
             return nn.HuberLoss(delta=1.0)
-        elif self.args.loss == 'LogCosh':
+        elif loss == 'LogCosh':
             def logcosh_loss(pred, target):
                 return torch.mean(torch.log(torch.cosh(pred - target)))
             return logcosh_loss
         else:
-            print(f"警告: 未知的损失函数 '{self.args.loss}'，使用默认的MSE损失")
+            print(f"警告: 未知的损失函数 '{loss}'，使用默认的MSE损失")
             return nn.MSELoss()        
     def _setup_logger(self):
         import datetime
