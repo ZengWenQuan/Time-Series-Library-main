@@ -1,18 +1,10 @@
 import os
 import yaml
-import torch
-import torch.nn as nn
 from torch import optim
-import numpy as np
-import time
-import mlflow
-from torch.utils.data import DataLoader, ConcatDataset
-
 from exp.exp_basic import Exp_Basic
 from data_provider.data_factory import data_provider
 from utils.scaler import Scaler
-from utils.tools import EarlyStopping
-from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, save_history_plot
+from utils.stellar_metrics import calculate_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, save_history_plot
 
 class Exp_Regression(Exp_Basic):
     def __init__(self, args):
@@ -58,3 +50,15 @@ class Exp_Regression(Exp_Basic):
                           target_names=self.args.targets)
         self.logger.warning("Label stats file not found. Label scaler will not be used.")
         return None
+        # --- ADDED: Reusable metric processing function ---
+    def calculate_and_save_all_metrics(self, preds, trues, phase, save_as):
+        if preds is None or trues is None: return None
+        #self.logger.info(f"Calculating and saving {save_as} metrics for {phase} set...")
+        save_path = os.path.join(self.args.run_dir, 'metrics', save_as)
+        
+        reg_metrics = calculate_metrics(preds, trues, self.args.targets)
+        save_regression_metrics(reg_metrics, save_path, self.args.targets, phase=phase)
+        
+        cls_metrics = calculate_feh_classification_metrics(preds, trues, self.args.feh_index)
+        save_feh_classification_metrics(cls_metrics, save_path, phase=phase)
+        return reg_metrics

@@ -3,8 +3,7 @@ from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from models.spectral_prediction import DualBranchMoENet
 
-from utils.tools import EarlyStopping
-from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, save_history_plot
+from utils.stellar_metrics import calculate_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, save_history_plot
 from utils.losses import RegressionFocalLoss ,GaussianNLLLoss
 import numpy as np
 import torch

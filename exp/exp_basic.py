@@ -191,6 +191,17 @@ class Exp_Basic(object):
             if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None:
                  if 'loss' in combined_reg_metrics:
                     mlflow.log_metric('combined_loss', combined_reg_metrics['loss'], step=epoch)
+            # --- ADDED: Conditionally print detailed metrics based on interval ---
+            if (epoch + 1) % self.args.vali_interval == 0:
+                self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
+                if train_reg_metrics:
+                    print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
+                if vali_reg_metrics:
+                    print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
+                if test_reg_metrics:
+                    print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")
+                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None:
+                    print(f"Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
 
             # 2. 调用新方法记录每个标签的MAE
             self.trace_metrics(
