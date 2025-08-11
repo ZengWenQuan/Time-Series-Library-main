@@ -161,7 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--lradj', type=str, default='warmup_cosine', help='adjust learning rate, options: [warmup_cosine, cos, step, exponential]')
     parser.add_argument('--cosine_t0', type=int, default=100, help='The number of epochs for the first restart of the cosine annealing scheduler.')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
-    parser.add_argument('--vali_interval', type=int, default=1, help='vali interval')
+    parser.add_argument('--vali_interval', type=int, default=5, help='vali interval')
 
     # DWT
     parser.add_argument('--dwt_level', type=int, default=3, help='dwt level')

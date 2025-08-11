@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -64,7 +63,7 @@ class LargeKernelBranch(nn.Module):
         self.output_dim = config['fc_dim']
 
     def forward(self, x):
-        x = x.unsqueeze(1) # [B, L] -> [B, 1, L]
+        x = x.unsqueeze(1)
         x = F.relu(self.conv(x))
         x = self.pool(x).squeeze(-1)
         x = self.fc(x)
@@ -74,7 +73,6 @@ class LargeKernelBranch(nn.Module):
 class UpsampleMultiScaleBranch(nn.Module):
     def __init__(self, config):
         super(UpsampleMultiScaleBranch, self).__init__()
-        # 转置卷积，实现2倍上采样
         self.upsample_conv = nn.ConvTranspose1d(
             in_channels=1,
             out_channels=config['pyramid_channels'][0],
@@ -82,7 +80,6 @@ class UpsampleMultiScaleBranch(nn.Module):
             stride=2,
             padding=(config['upsample_kernel'] - 2) // 2
         )
-        
         self.pyramid_blocks = nn.ModuleList()
         in_ch = config['pyramid_channels'][0]
         for out_ch in config['pyramid_channels']:
@@ -94,11 +91,11 @@ class UpsampleMultiScaleBranch(nn.Module):
         self.output_dim = in_ch
 
     def forward(self, x):
-        x = x.unsqueeze(1) # [B, L] -> [B, 1, L]
-        x = F.relu(self.upsample_conv(x)) # -> [B, C1, L*2]
+        x = x.unsqueeze(1)
+        x = F.relu(self.upsample_conv(x))
         for block in self.pyramid_blocks:
             x = block(x)
-        return x # -> [B, D_out, L_final]
+        return x
 
 # --- 3. 主模型: LargeKernelConvNet ---
 @register_model('LargeKernelConvNet')
@@ -109,7 +106,6 @@ class LargeKernelConvNet(nn.Module):
         self.targets = configs.targets
         with open(configs.model_conf, 'r') as f: model_config = yaml.safe_load(f)
 
-        # 初始化两个分支
         self.upsample_branch = UpsampleMultiScaleBranch(model_config['upsample_branch'])
         if self.task_name == 'spectral_prediction':
             self.large_kernel_branch = LargeKernelBranch(model_config['large_kernel_branch'])
@@ -118,7 +114,6 @@ class LargeKernelConvNet(nn.Module):
             lstm_input_dim = self.upsample_branch.output_dim
         else: raise ValueError(f"Task name '{self.task_name}' is not supported.")
 
-        # 初始化LSTM和预测头
         lstm_conf = model_config['bilstm_head']
         self.bilstm = nn.LSTM(lstm_input_dim, lstm_conf['lstm_hidden_dim'], lstm_conf['lstm_layers'], batch_first=True, bidirectional=True, dropout=lstm_conf.get('dropout', 0.2))
         head_input_dim = lstm_conf['lstm_hidden_dim'] * 2
@@ -140,23 +135,18 @@ class LargeKernelConvNet(nn.Module):
         else: raise ValueError(f"Task name '{self.task_name}' is not supported.")
 
     def forward_spectral_prediction(self, x_continuum, x_normalized):
-        # 提取特征
-        features_cont_vec = self.large_kernel_branch(x_continuum) # -> [B, D_cont]
-        features_norm_map = self.upsample_branch(x_normalized)   # -> [B, D_norm, L_down]
-        
-        # 融合特征
-        features_norm_seq = features_norm_map.transpose(1, 2) # -> [B, L_down, D_norm]
+        features_cont_vec = self.large_kernel_branch(x_continuum)
+        features_norm_map = self.upsample_branch(x_normalized)
+        features_norm_seq = features_norm_map.transpose(1, 2)
         cont_expanded = features_cont_vec.unsqueeze(1).expand(-1, features_norm_seq.size(1), -1)
         fused_sequence = torch.cat([features_norm_seq, cont_expanded], dim=-1)
-        
-        # LSTM 和 预测
         lstm_out, _ = self.bilstm(fused_sequence)
         final_features = lstm_out[:, -1, :]
         return torch.cat([head(final_features) for head in self.prediction_heads.values()], dim=1)
 
     def forward_regression(self, x):
-        features_map = self.upsample_branch(x) # -> [B, D_norm, L_down]
-        features_seq = features_map.transpose(1, 2) # -> [B, L_down, D_norm]
+        features_map = self.upsample_branch(x)
+        features_seq = features_map.transpose(1, 2)
         lstm_out, _ = self.bilstm(features_seq)
         final_features = lstm_out[:, -1, :]
         return torch.cat([head(final_features) for head in self.prediction_heads.values()], dim=1)
