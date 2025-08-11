@@ -71,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--freq', type=str, default='h',
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
     
-    parser.add_argument('--resume_from', type=str, default=None, help='path to a checkpoint to resume training from')
+    parser.add_argument('--checkpoints', type=str, default=None, help='path to a checkpoint to resume training from')
 
     # forecasting task
     parser.add_argument('--feature_size', type=int, default=4798, help='feature size for EACH input branch (continuum and normalized)')
