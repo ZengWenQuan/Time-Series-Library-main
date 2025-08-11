@@ -30,22 +30,20 @@ class Dataset_Spectral(Dataset):
 
         common_obsids = df_continuum.index.intersection(df_normalized.index).intersection(df_label.index)
         
-        df_continuum_aligned = df_continuum.loc[common_obsids]
-        df_normalized_aligned = df_normalized.loc[common_obsids]
-        df_label_aligned = df_label.loc[common_obsids]
-
-        if self.flag == 'train' and self.show_stats:
-            print("Calculating statistics for original training data...")
-            self._calculate_and_print_stats(df_continuum_aligned, "Continuum Spectra", stat_type='feature')
-            self._calculate_and_print_stats(df_normalized_aligned, "Normalized Spectra", stat_type='feature')
-            self._calculate_and_print_stats(df_label_aligned[self.args.targets], "Labels", stat_type='label')
-
         shuffled_obsids = common_obsids.tolist()
-        random.shuffle(shuffled_obsids)
+        if self.flag=='train':
+            random.shuffle(shuffled_obsids)
 
-        df_continuum = df_continuum_aligned.loc[shuffled_obsids]
-        df_normalized = df_normalized_aligned.loc[shuffled_obsids]
-        df_label = df_label_aligned.loc[shuffled_obsids][self.args.targets]
+        df_continuum = df_continuum.loc[shuffled_obsids]
+        df_normalized = df_normalized.loc[shuffled_obsids]
+        df_label = df_label.loc[shuffled_obsids][self.args.targets]
+        if self.flag == 'train':
+            #print("Calculating statistics for original training data...")
+            print("scale前数据统计")
+            self._calculate_and_print_stats(df_continuum, "Continuum Spectra", stat_type='feature')
+            self._calculate_and_print_stats(df_normalized, "Normalized Spectra", stat_type='feature')
+            self._calculate_and_print_stats(df_label, "Labels", stat_type='label')
+
 
         data_continuum_raw = df_continuum.values
         self.data_normalized = df_normalized.values
@@ -61,7 +59,13 @@ class Dataset_Spectral(Dataset):
             self.data_label = self.label_scaler.transform(data_label_raw)
         else:
             self.data_label = data_label_raw
-        
+        if self.flag == 'train':
+            #print("Calculating statistics for scaled training data...")
+            print("scale后数据统计")
+            self._calculate_and_print_stats(pd.DataFrame(self.data_continuum), "Continuum Spectra", stat_type='feature')
+            #self._calculate_and_print_stats(pd.DataFrame(df_normalized), "Normalized Spectra", stat_type='feature')
+            self._calculate_and_print_stats(pd.DataFrame(self.data_label), "Labels", stat_type='label')
+
         print(f"[{self.__class__.__name__}] flag: {self.flag}")
         print(f"continuum shape: {self.data_continuum.shape}, normalized shape: {self.data_normalized.shape}, label shape: {self.data_label.shape}")
 

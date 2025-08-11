@@ -50,10 +50,8 @@ class Dataset_Steller(Dataset):
 
         # 3. 对齐和打乱
         common_obsids = df_features.index.intersection(df_labels.index)
-        df_features = df_features.loc[common_obsids]
-        df_labels = df_labels.loc[common_obsids]
         self.shuffled_obsids = common_obsids.tolist()
-        random.shuffle(self.shuffled_obsids)
+        if self.flag=='train': random.shuffle(self.shuffled_obsids)
         df_features = df_features.loc[self.shuffled_obsids]
         df_labels = df_labels.loc[self.shuffled_obsids]
 
@@ -66,7 +64,7 @@ class Dataset_Steller(Dataset):
         labels_scaled = self.label_scaler.transform(labels_raw)
 
         # --- 新增：在训练集上打印归一化前后的统计数据对比 ---
-        if self.flag == 'train' and self.show_stats:
+        if self.flag == 'train':
             print("\n================== Data Statistics Comparison (Train Set) ==================")
             # 特征统计
             self._calculate_and_print_stats(df_features, "Features (Before Scaling)", stat_type='feature')

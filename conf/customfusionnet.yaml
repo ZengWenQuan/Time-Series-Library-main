@@ -1,4 +1,5 @@
-# CustomFusionNet 配置文件 (v4, 归一化谱分支采用MSPNet结构, 连续谱分支采用小波变换)
+
+# CustomFusionNet 配置文件 (v5, 根据用户指定参数更新)
 
 # --- 训练设置 ---
 training_settings:
@@ -8,12 +9,12 @@ training_settings:
 # --- 归一化谱处理分支 (模仿MSPNet结构) ---
 normalized_branch:
   # 金字塔每层的输出通道数(注意：这是指每个并行路径的输出通道数)
-  pyramid_channels: [16, 32, 64]
-  # 三个并行分支的卷积核大小
-  kernel_sizes: [3, 5, 9]
+  pyramid_channels: [8, 16, 32]
+  # 三个并行分支的卷积核大小 (注意: PyramidBlock只使用前三个值[3, 5, 7])
+  kernel_sizes: [3, 5, 7, 9]
   # 每个金字塔块后的池化大小
   pool_size: 2
-  # 是否使用批归一化 (根据你的要求，默认为false)
+  # 是否使用批归一化
   batch_norm: false
   # 是否使用通道注意力机制
   use_attention: true
@@ -22,23 +23,22 @@ normalized_branch:
 
 # --- 连续谱频域分支 (使用小波变换) ---
 continuum_wavelet_branch:
-  wavelet_name: 'db4'     # 小波基函数名称, e.g., 'db1', 'coif1', etc.
-  wavelet_levels: 4       # 小波分解的层数
-  batch_norm: false       # 是否在CNN中使用批归一化
+  wavelet_name: 'db4'
+  wavelet_levels: 4
+  batch_norm: false
   cnn:
     layers:
-      # 每个字典定义一个 Inception 块 + 池化层
       - {out_channels_per_path: 16, pool_size: 2}
       - {out_channels_per_path: 32, pool_size: 2}
 
 # --- 融合模块与LSTM配置 ---
 fusion:
-  strategy: 'concat'      # 可选: 'add', 'concat', 'attention'
-  attention_heads: 4        # 仅在 strategy='attention' 时有效
-  lstm_hidden_dim: 256
+  strategy: 'concat'
+  attention_heads: 4
+  lstm_hidden_dim: 256  # 对应 embedding_dim
   lstm_layers: 2
-  dropout: 0.3
+  dropout: 0.0          # 对应 dropout_rate
 
 # --- 预测头配置 (为每个标签创建一个) ---
 prediction_head:
-  hidden_layers: [128, 64] # 每个预测头的中间层维度
+  hidden_layers: [128, 64] # 对应 fc_hidden_dims
