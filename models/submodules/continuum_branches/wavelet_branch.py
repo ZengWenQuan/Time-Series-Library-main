@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 
 try:
-    from torchwavelets import DWT1D
+    from pytorch_wavelets import DWT1D
 except ImportError:
     DWT1D = None
 
@@ -29,7 +29,7 @@ from . import register_continuum_branch
 class ContinuumWaveletBranch(nn.Module):
     def __init__(self, config):
         super(ContinuumWaveletBranch, self).__init__()
-        if DWT1D is None: raise ImportError("ContinuumWaveletBranch requires torchwavelets. Run: pip install torchwavelets")
+        if DWT1D is None: raise ImportError("ContinuumWaveletBranch requires pytorch-wavelets. Run: pip install pytorch-wavelets")
         self.dwt = DWT1D(wave=config['wavelet_name'], J=config['wavelet_levels'], mode='symmetric')
         
         cnn_layers = []

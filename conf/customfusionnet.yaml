@@ -13,29 +13,29 @@ continuum_branch_name: 'ContinuumWaveletBranch'
 
 # --- 分支参数配置 ---
 normalized_branch_config:
-  pyramid_channels: [8, 16, 32]
-  kernel_sizes: [3, 5, 7, 9]
+  pyramid_channels: [8, 8, 16]
+  kernel_sizes: [3, 5, 7]
   pool_size: 2
   batch_norm: false
   use_attention: true
   attention_reduction: 4
 
-continuum_wavelet_branch_config:
+continuum_branch_config:
   wavelet_name: 'db4'
-  wavelet_levels: 4
+  wavelet_levels: 2
   batch_norm: false
   cnn:
     layers:
-      - {out_channels_per_path: 16, pool_size: 2}
-      - {out_channels_per_path: 32, pool_size: 2}
+      - {out_channels_per_path: 8, pool_size: 2}
+      - {out_channels_per_path: 8, pool_size: 2}
 
 # --- 融合与预测头配置 ---
 fusion_config:
   strategy: 'concat'
   attention_heads: 4
-  lstm_hidden_dim: 256
+  lstm_hidden_dim: 64
   lstm_layers: 2
-  dropout: 0.0
+  dropout: 0.3
 
 prediction_head_config:
   hidden_layers: [128, 64]
