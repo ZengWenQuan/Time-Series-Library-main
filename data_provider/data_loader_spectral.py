@@ -16,7 +16,7 @@ class Dataset_Spectral(Dataset):
 
         self.feature_scaler = feature_scaler
         self.label_scaler = label_scaler
-
+        self.transform = getattr(args, 'train_transform', None) if self.flag == 'train' else  None
         self.__read_data__()
 
     def __read_data__(self):
@@ -89,10 +89,14 @@ class Dataset_Spectral(Dataset):
         print("---------------------------------")
 
     def __getitem__(self, index):
-        # 获取对应索引的一维特征向量
-        seq_x_continuum = self.data_continuum[index]  # 形状: (L,)
-        seq_x_normalized = self.data_normalized[index] # 形状: (L,)
+        seq_x_continuum = self.data_continuum[index].copy()
+        seq_x_normalized = self.data_normalized[index].copy()
         
+        # --- ADDED: Apply augmentations if they exist ---
+        if self.transform:
+            seq_x_continuum = self.transform(seq_x_continuum)
+            seq_x_normalized = self.transform(seq_x_normalized)
+
         # 使用 np.stack 将两个 (L,) 的向量合并成一个 (L, 2) 的二维数组
         x_combined = np.stack([seq_x_continuum, seq_x_normalized], axis=-1)
 

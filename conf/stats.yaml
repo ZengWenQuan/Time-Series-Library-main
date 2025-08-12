@@ -52,3 +52,25 @@ flux:
   25th_percentile: 136.95295902862927
   median_50th_percentile: 481.4963256389092
   75th_percentile: 1618.2711704103758
+
+# --- Data Augmentation Settings ---
+augs_conf:
+  - name: 'add_noise'
+    enabled: true
+    p: 0.5
+    params: {sigma: 0.01}
+  
+  - name: 'random_shift'
+    enabled: false
+    p: 0.5
+    params: {max_shift: 2}
+
+  - name: 'random_scaling'
+    enabled: false # 此项被关闭，将不会被加载
+    p: 0.3
+    params: {min_scale: 0.9, max_scale: 1.1}
+
+  - name: 'random_masking'
+    enabled: false
+    p: 0.2
+    params: {mask_width_ratio: 0.05, mask_value: 1.0}

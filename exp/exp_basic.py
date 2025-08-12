@@ -4,11 +4,13 @@ import torch.nn as nn
 import time
 from utils.losses import RegressionFocalLoss
 from utils.tools import EarlyStopping
+from utils.augmentations import Transforms
 from utils.stellar_metrics import save_history_plot
 import mlflow
 import logging
 import numpy as np
 import pandas as pd
+import yaml
 from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, format_feh_classification_metrics
 # --- Model Registration Mechanism ---
 MODEL_REGISTRY = {}
@@ -42,9 +44,22 @@ class Exp_Basic(object):
         self.model = self._build_model().to(self.device)
 
         # --- ADDED: Resume from checkpoint logic ---
-        if getattr(self.args, 'checkpoints', None) and os.path.exists(self.args.checkpoints):
-            self.logger.info(f"Resuming training from checkpoint: {self.args.checkpoints}")
-            self.model.load_state_dict(torch.load(self.args.checkpoints, map_location=self.device))
+        if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
+            self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
+            self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
+
+    def _build_train_transforms(self):
+        """从配置文件加载增强配置，创建流水线并直接附加到args。"""
+        augs_conf = []
+        if hasattr(self.args, 'stats_path') and self.args.stats_path and os.path.exists(self.args.stats_path):
+            with open(self.args.stats_path, 'r') as f:
+                stats = yaml.safe_load(f)
+            augs_conf = stats.get('augs_conf', [])
+        
+        self.logger.info("Initializing augmentation pipeline and attaching to args...")
+        # 将构建好的流水线对象直接赋值给 self.args 的一个新属性
+        self.args.train_transform = Transforms(augs_conf)
+        # 此函数不再有返回值
 
     def _build_model(self):
         model_class = MODEL_REGISTRY.get(self.args.model)

@@ -15,6 +15,8 @@ class Dataset_Steller(Dataset):
         self.feature_scaler = feature_scaler
         self.label_scaler = label_scaler
         self.show_stats = getattr(args, 'show_stats', False)
+        # --- 从args中获取预先构建好的transform流水线 ---
+        self.transform = getattr(args, 'train_transform', None) if self.flag == 'train' else  None
         self.__read_data__()
 
     def _calculate_and_print_stats(self, df, name, stat_type='label'):
@@ -77,9 +79,33 @@ class Dataset_Steller(Dataset):
         self.data_x = features_scaled
         self.data_y = labels_scaled
 
+    def _build_transforms(self):
+        """Helper function to build augmentation pipeline from config."""
+        from utils.augmentations import AUGMENTATION_REGISTRY, Compose, ProbabilisticAugmentation
+        import yaml
+        augs_list = []
+        if hasattr(self.args, 'stats_path') and self.args.stats_path and os.path.exists(self.args.stats_path):
+            with open(self.args.stats_path, 'r') as f:
+                stats = yaml.safe_load(f)
+            augs_conf = stats.get('augs_conf', [])
+            for aug_conf in augs_conf:
+                if aug_conf.get('enabled', False) and aug_conf['name'] in AUGMENTATION_REGISTRY:
+                    AugmentationClass = AUGMENTATION_REGISTRY[aug_conf['name']]
+                    transform = AugmentationClass(**aug_conf.get('params', {}))
+                    prob_transform = ProbabilisticAugmentation(transform, p=aug_conf.get('p', 1.0))
+                    augs_list.append(prob_transform)
+        return Compose(augs_list) if augs_list else None
+
     def __getitem__(self, index):
-        # 增加返回 obsid，与其他数据加载器保持一致
-        return torch.from_numpy(self.data_x[index]).float(), torch.from_numpy(self.data_y[index]).float(), self.shuffled_obsids[index]
+        x = self.data_x[index].copy() # 使用copy避免修改原始数据
+        y = self.data_y[index]
+        obsid = self.shuffled_obsids[index]
+
+        # 如果是训练集且transform存在，则应用数据增强
+        if self.transform:
+            x = self.transform(x)
+
+        return torch.from_numpy(x).float(), torch.from_numpy(y).float(), obsid
 
     def __len__(self):
         return len(self.data_x)
