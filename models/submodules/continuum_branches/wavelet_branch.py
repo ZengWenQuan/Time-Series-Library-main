@@ -23,6 +23,9 @@ class InceptionBlock(nn.Module):
         x3 = F.relu(self.path3(x))
         return torch.cat([x1, x2, x3], dim=1)
 
+from . import register_continuum_branch
+
+@register_continuum_branch
 class ContinuumWaveletBranch(nn.Module):
     def __init__(self, config):
         super(ContinuumWaveletBranch, self).__init__()

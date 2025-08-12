@@ -24,6 +24,9 @@ class SEBlock(nn.Module):
         y = self.excitation(y).view(b, c, 1)
         return x * y.expand_as(x)
 
+from . import register_normalized_branch
+
+@register_normalized_branch
 class LineAttentionBranch(nn.Module):
     def __init__(self, config, norm_type):
         super(LineAttentionBranch, self).__init__()

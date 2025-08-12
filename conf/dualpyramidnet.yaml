@@ -1,12 +1,20 @@
-pyramid_channels: [16, 32, 64]
-kernel_sizes: [3, 5, 7]
-use_batch_norm: false
-use_attention: True
-attention_reduction: 8
-fc_hidden_dims: [256, 128]
-dropout: 0.1
 
-# 7. 新增：训练设置
-training_settings:
-  # 可选: 'RegressionFocalLoss', 'GaussianNLLLoss', 'MSELoss'
-  loss_function: 'l1'
+# DualPyramidNet 配置文件 (v2, 使用分支注册机制)
+
+# --- 分支选择 ---
+# 从 models.submodules.normalized_branches 注册器中选择
+# 两个分支使用同样类型的提取器
+branch_name: 'PyramidFeatureExtractor'
+
+# --- 分支参数配置 ---
+branch_config:
+  pyramid_channels: [16, 32, 64]
+  kernel_sizes: [3, 5, 9]
+  use_batch_norm: true
+  use_attention: true
+  attention_reduction: 4
+
+# --- 预测头配置 ---
+prediction_head:
+  fc_hidden_dims: [512, 256, 128]
+  dropout: 0.2

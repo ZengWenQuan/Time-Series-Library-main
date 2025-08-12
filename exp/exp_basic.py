@@ -17,7 +17,7 @@ def register_model(name):
     """A decorator to register a new model class."""
     def decorator(cls):
         if cls.__name__ in MODEL_REGISTRY:
-            raise ValueError(f'模型{cls.__name__} 已经存在了！不能重复注册')
+            raise ValueError(f'主模型{cls.__name__} 已经存在了！不能重复注册')
         MODEL_REGISTRY[cls.__name__] = cls
         return cls
     return decorator
@@ -94,7 +94,7 @@ class Exp_Basic(object):
         raise NotImplementedError("Subclasses must implement _get_data()")
 
     def _select_optimizer(self):
-        return torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        return torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
 
     def _select_scheduler(self, optimizer):
         if self.args.lradj == 'cos':

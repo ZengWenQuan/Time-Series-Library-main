@@ -1,16 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-Dual Pyramid Network for Spectral Analysis
-
-Author: Assistant
-Date: 2025-08-04
-
-Architecture:
-- Two separate PyramidFeatureExtractors for continuum and normalized spectra.
-- Feature fusion and a final FFN for regression.
-"""
 
 import torch
 import torch.nn as nn
@@ -18,211 +5,63 @@ import torch.nn.functional as F
 import torch.nn.init as init
 import yaml
 from exp.exp_basic import register_model
-
-class GatedActivation(nn.Module):
-    """
-    Gated Activation Unit to control feature flow.
-    """
-    def __init__(self, channels):
-        super(GatedActivation, self).__init__()
-        # A simple 1x1 convolution to learn the gate weights
-        self.gate_conv = nn.Conv1d(channels, channels, kernel_size=1)
-        self._initialize_weights()
-
-    def forward(self, x):
-        # Apply sigmoid to the gate's output to get values between 0 and 1
-        gate_values = torch.sigmoid(self.gate_conv(x))
-        # Element-wise multiplication
-        return x * gate_values
-
-    def _initialize_weights(self):
-        init.kaiming_normal_(self.gate_conv.weight, mode='fan_out', nonlinearity='relu')
-        if self.gate_conv.bias is not None:
-            init.constant_(self.gate_conv.bias, 0)
-
-class PyramidFeatureExtractor(nn.Module):
-    """
-    Extracts features from a spectrum using a multi-scale pyramid architecture.
-    """
-    def __init__(self, configs):
-        super(PyramidFeatureExtractor, self).__init__()
-        
-        self.pyramid_channels = configs.pyramid_channels
-        self.use_batch_norm = configs.use_batch_norm
-        
-        # Input projection layer
-        layers = [nn.Conv1d(1, self.pyramid_channels[0], kernel_size=7, padding=3, bias=not self.use_batch_norm)]
-        if self.use_batch_norm:
-            layers.append(nn.BatchNorm1d(self.pyramid_channels[0]))
-        layers.append(nn.ReLU(inplace=True))
-        self.input_proj = nn.Sequential(*layers)
-        
-        # Pyramid blocks sequence
-        self.pyramid_blocks = nn.ModuleList()
-        input_ch = self.pyramid_channels[0]
-        for i in range(len(self.pyramid_channels)):
-            output_ch = self.pyramid_channels[i]
-            self.pyramid_blocks.append(
-                PyramidBlock(
-                    input_ch, 
-                    output_ch, 
-                    kernel_sizes=configs.kernel_sizes, 
-                    use_batch_norm=self.use_batch_norm,
-                    use_attention=configs.use_attention,
-                    attention_reduction=configs.attention_reduction
-                )
-            )
-            input_ch = output_ch * 3 # The output of PyramidBlock concatenates 3 branches
-
-        # Global average pooling to create a fixed-size feature vector
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
-
-    def forward(self, x):
-        # x: [batch_size, seq_len]
-        x = x.unsqueeze(1) # -> [batch_size, 1, seq_len]
-        
-        # Input projection
-        x = self.input_proj(x)
-        
-        # Through pyramid blocks
-        for block in self.pyramid_blocks:
-            x = block(x)
-            
-        # Global pooling
-        x = self.global_pool(x) # -> [batch_size, channels, 1]
-        return x.squeeze(-1) # -> [batch_size, channels]
-
-class PyramidBlock(nn.Module):
-    """
-    A single block in the pyramid, with three parallel branches for different scales.
-    """
-    def __init__(self, input_channel, output_channel, kernel_sizes, 
-                 use_batch_norm, use_attention, attention_reduction):
-        super(PyramidBlock, self).__init__()
-        
-        self.use_attention = use_attention
-        
-        self.fine_branch = self._make_branch(input_channel, output_channel, kernel_sizes[0], use_batch_norm)
-        self.medium_branch = self._make_branch(input_channel, output_channel, kernel_sizes[1], use_batch_norm)
-        self.coarse_branch = self._make_branch(input_channel, output_channel, kernel_sizes[2], use_batch_norm)
-        
-        self.residual = nn.Sequential()
-        if input_channel != output_channel * 3:
-            layers = [nn.Conv1d(input_channel, output_channel * 3, kernel_size=1, bias=not use_batch_norm)]
-            if use_batch_norm:
-                layers.append(nn.BatchNorm1d(output_channel * 3))
-            self.residual = nn.Sequential(*layers)
-            
-        if self.use_attention:
-            self.gate = GatedActivation(output_channel * 3)
-        
-        self._initialize_weights()
-    
-    def _make_branch(self, input_channel, output_channel, kernel_size, use_batch_norm):
-        padding = kernel_size // 2
-        layers = [nn.Conv1d(input_channel, output_channel, kernel_size=kernel_size, padding=padding, bias=not use_batch_norm)]
-        if use_batch_norm:
-            layers.append(nn.BatchNorm1d(output_channel))
-        layers.append(nn.ReLU(inplace=True))
-        return nn.Sequential(*layers)
-    
-    def forward(self, x):
-        fine_out = self.fine_branch(x)
-        medium_out = self.medium_branch(x)
-        coarse_out = self.coarse_branch(x)
-        
-        pyramid_out = torch.cat([fine_out, medium_out, coarse_out], dim=1)
-        
-        if self.use_attention:
-            pyramid_out = self.gate(pyramid_out)
-        
-        return F.relu(pyramid_out + self.residual(x))
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv1d):
-                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm1d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
+from models.submodules.normalized_branches import NORMALIZED_BRANCH_REGISTRY
 
 @register_model('DualPyramidNet')
 class DualPyramidNet(nn.Module):
-    """
-    Dual Pyramid Network for Spectral Analysis.
-    """
     def __init__(self, configs):
         super(DualPyramidNet, self).__init__()
-        
         self.task_name = configs.task_name
+        self.targets = configs.targets
         self.feature_size = configs.feature_size
         self.label_size = configs.label_size
 
-        # Load model-specific config if provided
-        if hasattr(configs, 'model_conf') and configs.model_conf:
-            with open(configs.model_conf, 'r') as f:
-                model_config = yaml.safe_load(f)
-            # Overwrite general configs with model-specific ones
-            for key, value in model_config.items():
-                setattr(configs, key, value)
+        with open(configs.model_conf, 'r') as f:
+            model_config = yaml.safe_load(f)
 
-        # Two separate feature extractors
-        self.continuum_extractor = PyramidFeatureExtractor(configs)
-        self.normalized_extractor = PyramidFeatureExtractor(configs)
+        # --- 使用注册器动态构建分支 ---
+        BranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['branch_name']]
+        branch_config = model_config['branch_config']
         
-        # Calculate the input dimension for the final FFN
-        # It's the concatenated output of both extractors
-        ffn_input_dim = configs.pyramid_channels[-1] * 3 * 2
+        self.continuum_extractor = BranchClass(branch_config)
+        self.normalized_extractor = BranchClass(branch_config)
         
-        # Final Feed-Forward Network
+        ffn_input_dim = self.continuum_extractor.output_dim + self.normalized_extractor.output_dim
+        
+        # --- FFN 预测头 ---
         fc_layers = []
         current_dim = ffn_input_dim
-        for hidden_dim in configs.fc_hidden_dims:
+        for hidden_dim in model_config['prediction_head']['fc_hidden_dims']:
             fc_layers.append(nn.Linear(current_dim, hidden_dim))
-            fc_layers.append(nn.BatchNorm1d(hidden_dim))
+            if model_config['branch_config']['use_batch_norm']: # 遵循分支的BN设置
+                fc_layers.append(nn.BatchNorm1d(hidden_dim))
             fc_layers.append(nn.ReLU(inplace=True))
-            fc_layers.append(nn.Dropout(configs.dropout))
+            fc_layers.append(nn.Dropout(model_config['prediction_head']['dropout']))
             current_dim = hidden_dim
         
         fc_layers.append(nn.Linear(current_dim, self.label_size))
         self.ffn = nn.Sequential(*fc_layers)
-
         self._initialize_weights()
 
     def _initialize_weights(self):
         for m in self.ffn.modules():
-            if isinstance(m, nn.Linear):
-                init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-                if m.bias is not None:
-                    init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm1d):
-                init.constant_(m.weight, 1)
-                init.constant_(m.bias, 0)
+            if isinstance(m, nn.Linear): init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm1d): init.constant_(m.weight, 1); init.constant_(m.bias, 0)
 
-    def forward(self, x_enc, x_mark_enc=None, x_dec=None, x_mark_dec=None, mask=None):
-        if self.task_name in ['spectral_prediction', 'regression', 'stellar_parameter_estimation']:
-            return self.regression(x_enc)
-        return None
-
-    def regression(self, x_enc):
-        # Split input into continuum and normalized spectra
-        continuum_spec = x_enc[:, :self.feature_size]
-        normalized_spec = x_enc[:, self.feature_size:]
+    def forward(self, x, x_normalized=None):
+        # 回归任务只使用一个输入
+        if self.task_name == 'regression':
+            features = self.normalized_extractor(x)
+            return self.ffn(features)
         
-        # Extract features from both parts
-        continuum_features = self.continuum_extractor(continuum_spec)
-        normalized_features = self.normalized_extractor(normalized_spec)
+        # 光谱预测任务使用两个输入
+        elif self.task_name == 'spectral_prediction':
+            if x_normalized is None: x_continuum, x_normalized = x[:, :, 0], x[:, :, 1]
+            else: x_continuum = x
+            
+            continuum_features = self.continuum_extractor(x_continuum)
+            normalized_features = self.normalized_extractor(x_normalized)
+            combined_features = torch.cat([continuum_features, normalized_features], dim=1)
+            return self.ffn(combined_features)
         
-        # Concatenate features
-        combined_features = torch.cat([continuum_features, normalized_features], dim=1)
-        
-        # Final prediction through FFN
-        output = self.ffn(combined_features)
-        
-        return output
-
-if __name__ == '__main__':
-    continuum_data=torch.rand(3,4802)
-    normalized_data=torch.rand(3,4802)
+        else: raise ValueError(f"Task name '{self.task_name}' is not supported.")

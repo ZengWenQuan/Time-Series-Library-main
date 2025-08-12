@@ -35,6 +35,9 @@ class GatingNetwork(nn.Module):
         top_k_weights, top_k_indices = torch.topk(logits, self.k, dim=1)
         return F.softmax(top_k_weights, dim=1), top_k_indices
 
+from . import register_continuum_branch
+
+@register_continuum_branch
 class FrequencyMoEBranch(nn.Module):
     def __init__(self, config, norm_type):
         super(FrequencyMoEBranch, self).__init__()

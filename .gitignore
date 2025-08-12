@@ -11,6 +11,7 @@ mlruns/
 .Python
 build/
 .claude/
+gemini_context/
 develop-eggs/
 dist/
 downloads/

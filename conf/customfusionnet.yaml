@@ -1,28 +1,26 @@
-
-# CustomFusionNet 配置文件 (v5, 根据用户指定参数更新)
+# CustomFusionNet 配置文件 (v6, 使用分支注册机制)
 
 # --- 训练设置 ---
 training_settings:
   loss_function: 'mse'
   mixed_precision: True
 
-# --- 归一化谱处理分支 (模仿MSPNet结构) ---
-normalized_branch:
-  # 金字塔每层的输出通道数(注意：这是指每个并行路径的输出通道数)
+# --- 分支选择 ---
+# 从 models.submodules.normalized_branches 注册器中选择
+normalized_branch_name: 'NormalizedSpectrumBranch' 
+# 从 models.submodules.continuum_branches 注册器中选择
+continuum_branch_name: 'ContinuumWaveletBranch'
+
+# --- 分支参数配置 ---
+normalized_branch_config:
   pyramid_channels: [8, 16, 32]
-  # 三个并行分支的卷积核大小 (注意: PyramidBlock只使用前三个值[3, 5, 7])
   kernel_sizes: [3, 5, 7, 9]
-  # 每个金字塔块后的池化大小
   pool_size: 2
-  # 是否使用批归一化
   batch_norm: false
-  # 是否使用通道注意力机制
   use_attention: true
-  # 注意力机制的通道压缩比
   attention_reduction: 4
 
-# --- 连续谱频域分支 (使用小波变换) ---
-continuum_wavelet_branch:
+continuum_wavelet_branch_config:
   wavelet_name: 'db4'
   wavelet_levels: 4
   batch_norm: false
@@ -31,14 +29,13 @@ continuum_wavelet_branch:
       - {out_channels_per_path: 16, pool_size: 2}
       - {out_channels_per_path: 32, pool_size: 2}
 
-# --- 融合模块与LSTM配置 ---
-fusion:
+# --- 融合与预测头配置 ---
+fusion_config:
   strategy: 'concat'
   attention_heads: 4
-  lstm_hidden_dim: 256  # 对应 embedding_dim
+  lstm_hidden_dim: 256
   lstm_layers: 2
-  dropout: 0.0          # 对应 dropout_rate
+  dropout: 0.0
 
-# --- 预测头配置 (为每个标签创建一个) ---
-prediction_head:
-  hidden_layers: [128, 64] # 对应 fc_hidden_dims
+prediction_head_config:
+  hidden_layers: [128, 64]

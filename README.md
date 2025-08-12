@@ -89,3 +89,67 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 
 ---
 *最后更新: 2025-08-05*
+
+---
+
+## 模型库与使用示例 (v2)
+
+*最后更新: 2025-08-12*
+
+本项目后续开发的核心模型均支持多任务，可通过 `task_name` 参数在 `spectral_prediction` 和 `regression` 任务间切换。
+
+### 1. CustomFusionNet
+
+- **设计思想**: 一个高度灵活的双分支融合网络，其分支可以从模块库中动态选择和加载。
+  - **连续谱分支**: 采用**小波变换(Wavelet Transform)**提取时频特征，后接一个简单的多尺度CNN。
+  - **归一化谱分支**: 采用了参考 `MSPNet` 设计的**金字塔式多尺度网络**，通过并行不同大小的卷积核来捕捉精细特征。
+  - **后端**: 使用双向LSTM和多头FFN进行最终预测。
+- **配置文件**: `conf/customfusionnet.yaml`
+
+#### 使用方法:
+
+- **执行光谱预测任务**: 
+  ```bash
+  bash scripts/spectral_prediction/run_customfusionnet_spectral.sh
+  ```
+- **执行回归任务** (此模式下只使用归一化谱分支):
+  ```bash
+  bash scripts/regression/run_customfusionnet_regression.sh
+  ```
+
+### 2. LargeKernelConvNet
+
+- **设计思想**: 探索非常规卷积在光谱分析中的应用。
+  - **连续谱分支**: 使用**超大核卷积 (Large Kernel Convolution)** 来一次性捕捉光谱的全局长程依赖。
+  - **归一化谱分支**: 先通过**转置卷积 (Transposed Convolution)** 对输入进行上采样，再送入金字塔式多尺度网络进行精细特征提取。
+  - **后端**: 同样使用双向LSTM和多头FFN。
+- **配置文件**: `conf/largekernel.yaml`
+
+#### 使用方法:
+
+- **执行光谱预测任务**:
+  ```bash
+  bash scripts/spectral_prediction/run_largekernel.sh
+  ```
+- **执行回归任务** (此模式下只使用归一化谱分支):
+  ```bash
+  bash scripts/regression/run_largekernel_regression.sh
+  ```
+
+### 3. DualBranchMoENet
+
+- **设计思想**: 结合了混合专家（Mixture of Experts, MoE）思想的经典双分支网络。
+  - **连续谱分支**: 对光谱进行FFT变换，然后使用一个**门控网络 (Gating Network)** 将频域特征动态地分配给多个“专家网络”（`SimplePyramidConv`）中的一部分进行处理。
+  - **归一化谱分支**: 一个带有**通道注意力(SE Block)**的多尺度卷积网络。
+- **配置文件**: `conf/dual_branch_moe.yaml`
+
+#### 使用方法:
+
+- **执行光谱预测任务**:
+  ```bash
+  bash scripts/spectral_prediction/run_dual_branch_moe.sh
+  ```
+- **执行回归任务** (此模式下只使用归一化谱分支):
+  ```bash
+  # 你可以模仿其他脚本，为此模型创建一个回归任务的训练脚本
+  ```
