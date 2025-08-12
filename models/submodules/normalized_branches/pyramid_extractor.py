@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from ..submodules.normalized_branches import register_normalized_branch
+from . import register_normalized_branch
 
 class GatedActivation(nn.Module):
     def __init__(self, channels):
@@ -54,7 +54,7 @@ class PyramidBlock(nn.Module):
             if isinstance(m, nn.Conv1d): init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm1d): init.constant_(m.weight, 1); init.constant_(m.bias, 0)
 
-@register_normalized_branch('PyramidFeatureExtractor')
+@register_normalized_branch
 class PyramidFeatureExtractor(nn.Module):
     def __init__(self, config):
         super(PyramidFeatureExtractor, self).__init__()

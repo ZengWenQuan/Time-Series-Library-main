@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 import math
-from ..submodules.continuum_branches import register_continuum_branch
+from . import register_continuum_branch
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -21,7 +21,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return torch.clamp(x + self.pe[:x.size(0), :], min=-10.0, max=10.0)
 
-@register_continuum_branch('CNNTransformerBranch')
+@register_continuum_branch
 class ContinuumBranch(nn.Module):
     def __init__(self, config):
         super(ContinuumBranch, self).__init__()

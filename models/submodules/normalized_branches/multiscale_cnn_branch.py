@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ..submodules.normalized_branches import register_normalized_branch
+from . import register_normalized_branch
 
 class MultiScaleBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_sizes, use_attention, use_batch_norm, dropout_rate):
@@ -41,7 +41,7 @@ class MultiScaleBlock(nn.Module):
         if self.use_attention: fused_features = fused_features * self.attention(fused_features)
         return F.relu(fused_features + self.residual(x))
 
-@register_normalized_branch('MultiScaleCNNBranch')
+@register_normalized_branch
 class AbsorptionBranch(nn.Module):
     def __init__(self, config):
         super(AbsorptionBranch, self).__init__()
