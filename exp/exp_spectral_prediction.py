@@ -30,32 +30,6 @@ class Exp_Spectral_Prediction(Exp_Basic):
     """
     def __init__(self, args):
         super(Exp_Spectral_Prediction, self).__init__(args)
-        self._setup_logger()
-        self.targets = args.targets
-        self.args=args
-        if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
-            try:
-                with open(args.model_conf, 'r') as f:
-                    model_config = yaml.safe_load(f)
-                training_settings = model_config.get('training_settings', {})
-                self.loss_function_name = training_settings.get('loss_function', 'RegressionFocalLoss')
-                use_amp_from_conf = model_config.get('mixed_precision', False)
-                if use_amp_from_conf and not getattr(args, 'use_amp', False):
-                    self.use_amp = True
-                else:
-                    self.use_amp = getattr(args, 'use_amp', False)
-            except Exception as e:
-                self.loss_function_name = 'RegressionFocalLoss'
-                self.use_amp = getattr(args, 'use_amp', False)
-        else:
-            self.loss_function_name = 'mae'
-            self.use_amp = getattr(args, 'use_amp', False)
-
-        if self.use_amp:
-            self.scaler = GradScaler()
-        else:
-            self.scaler = None
-        
         self.label_scaler=self.get_label_scaler()
         self.feature_scaler=self.get_feature_scaler()
         self._get_data()
@@ -65,25 +39,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
         self.vali_data, self.vali_loader = data_provider(args=self.args,flag='val', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
         self.test_data, self.test_loader = data_provider(args=self.args,flag='test', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
 
-    def _select_criterion(self):
-        loss_mapping = {
-            'l1': nn.L1Loss, 'mae': nn.L1Loss,
-            'l2': nn.MSELoss, 'mse': nn.MSELoss,
-            'regressionfocalloss': RegressionFocalLoss,
-            'gaussiannllloss': GaussianNLLLoss
-        }
-        loss_class = loss_mapping.get(self.loss_function_name.lower())
-        if loss_class:
-            return loss_class()
-        else:
-            return RegressionFocalLoss()
 
-    
-
-    def _select_scheduler(self, optimizer):
-        if self.args.lradj == 'cos':
-            return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
-        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
 
     def get_feature_scaler(self):
         if self.args.stats_path:

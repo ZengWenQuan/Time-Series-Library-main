@@ -157,11 +157,11 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay (L2 penalty) for the optimizer')
     parser.add_argument('--max_grad_norm', type=float, default=20.0, help='max norm of the gradients')
     parser.add_argument('--des', type=str, default='test', help='exp description')
-    parser.add_argument('--loss', type=str, default='mse', help='loss function')
+    
     parser.add_argument('--loss_threshold', type=float, default=100000.0, help='threshold for skipping batches with abnormally high loss')
-    parser.add_argument('--lradj', type=str, default='warmup_cosine', help='adjust learning rate, options: [warmup_cosine, cos, step, exponential]')
-    parser.add_argument('--cosine_t0', type=int, default=100, help='The number of epochs for the first restart of the cosine annealing scheduler.')
-    parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
+    
+    #parser.add_argument('--cosine_t0', type=int, default=100, help='The number of epochs for the first restart of the cosine annealing scheduler.')
+    #parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
     parser.add_argument('--vali_interval', type=int, default=5, help='vali interval')
 
     # DWT

@@ -4,6 +4,8 @@
 # --- 训练设置 ---
 training_settings:
   loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.0, 1.0]
+  lradj: 'cos'
   mixed_precision: True
 
 # --- 分支与头模块选择 ---

@@ -1,4 +1,3 @@
-
 # DualBranchMoENet 配置文件 (v4, 使用分支、融合和头注册机制)
 
 # --- 分支、融合与头模块选择 ---
@@ -42,3 +41,9 @@ head_config:
 
 # --- 通用设置 ---
 normalization_type: "batchnorm"
+
+training_settings:
+  loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.0, 1.0]
+  lradj: 'cos'
+  mixed_precision: True

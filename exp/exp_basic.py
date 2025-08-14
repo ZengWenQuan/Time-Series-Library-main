@@ -31,6 +31,27 @@ class Exp_Basic(object):
         self.targets = args.targets
         self.device = self._acquire_device()
         self._setup_logger()
+        self.args.loss='mae'
+        self.args.use_amp=True
+        self.args.lradj='cos'
+        # --- ADDED: Read training settings from model_conf.yaml ---
+        if hasattr(self.args, 'model_conf') and self.args.model_conf and os.path.exists(self.args.model_conf):
+            try:
+                with open(self.args.model_conf, 'r') as f:
+                    model_config = yaml.safe_load(f)
+                
+                training_settings = model_config.get('training_settings', {})
+                self.args.loss = training_settings.get('loss_function', self.args.loss)
+                self.args.lradj = training_settings.get('lradj', self.args.lradj)
+                self.args.loss_weights = training_settings.get('loss_weights', [1,1,1,1])
+                
+                self.args.use_amp = training_settings.get('mixed_precision', True)
+
+            except Exception as e:
+                self.logger.error(f"Error processing model config file: {e}")
+                self.args.loss_weights = None # Ensure default on error
+        else:
+            self.args.loss_weights = None # Ensure default if no file
 
         # --- ADDED: Initialize GradScaler for AMP ---
         self.scaler = None
@@ -206,7 +227,7 @@ class Exp_Basic(object):
                 if self.scaler is not None:
                     with torch.amp.autocast('cuda'):
                         outputs = self.model(batch_x.float().to(self.device))
-                        loss = criterion(outputs, batch_y.float().to(self.device))
+                        loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i] for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
                     
                     self.scaler.scale(loss).backward()
                     # 先反缩放，再做梯度裁剪和记录，避免因为缩放因子导致的梯度数值虚高
@@ -217,7 +238,7 @@ class Exp_Basic(object):
                 else:
                     # Standard training
                     outputs = self.model(batch_x.float().to(self.device))
-                    loss = criterion(outputs, batch_y.float().to(self.device))
+                    loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i] for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
                     loss.backward()
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
                     model_optim.step()
@@ -363,15 +384,15 @@ class Exp_Basic(object):
 
     def _select_criterion(self):
         loss=self.args.loss.lower()
-        if loss == 'Mse' or loss == 'l2' :
+        if loss == 'Mse'.lower() or loss == 'l2'.lower() :
             return nn.MSELoss()
-        elif loss == 'Mae' or loss =='l1':
+        elif loss == 'Mae'.lower() or loss =='l1'.lower():
             return nn.L1Loss()
-        elif loss == 'SmoothL1':
+        elif loss == 'SmoothL1'.lower():
             return nn.SmoothL1Loss()
-        elif loss == 'Huber':
+        elif loss == 'Huber'.lower():
             return nn.HuberLoss(delta=1.0)
-        elif loss == 'LogCosh':
+        elif loss == 'LogCosh'.lower():
             def logcosh_loss(pred, target):
                 return torch.mean(torch.log(torch.cosh(pred - target)))
             return logcosh_loss

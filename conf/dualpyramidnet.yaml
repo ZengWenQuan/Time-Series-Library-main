@@ -24,3 +24,9 @@ head_config:
   fc_hidden_dims: [512, 256, 128]
   dropout: 0.2
   use_batch_norm: true
+
+training_settings:
+  loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.0, 1.0]
+  lradj: 'cos'
+  mixed_precision: True
