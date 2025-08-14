@@ -1,10 +1,9 @@
+# DualPyramidNet 配置文件 (v4, 使用分支、融合和头注册机制)
 
-# DualPyramidNet 配置文件 (v2, 使用分支注册机制)
-
-# --- 分支选择 ---
-# 从 models.submodules.normalized_branches 注册器中选择
-# 两个分支使用同样类型的提取器
+# --- 分支与头模块选择 ---
 branch_name: 'PyramidFeatureExtractor'
+fusion_name: 'GeneralFusion'
+head_name: 'SimpleFFN_Head'
 
 # --- 分支参数配置 ---
 branch_config:
@@ -14,7 +13,14 @@ branch_config:
   use_attention: true
   attention_reduction: 4
 
-# --- 预测头配置 ---
-prediction_head:
+# --- 融合模块参数配置 ---
+fusion_config:
+  strategy: 'concat'
+  # dim_norm and dim_cont will be added dynamically by the model
+
+# --- 头模块参数配置 ---
+head_config:
+  # ffn_input_dim 将由代码动态计算
   fc_hidden_dims: [512, 256, 128]
   dropout: 0.2
+  use_batch_norm: true

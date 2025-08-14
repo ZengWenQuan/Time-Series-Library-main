@@ -1,13 +1,11 @@
-# DualBranchMoENet 配置文件 (v2, 使用分支注册机制)
 
-# --- 训练设置 ---
-training_settings:
-  loss_function: 'mse'
-  mixed_precision: True
+# DualBranchMoENet 配置文件 (v4, 使用分支、融合和头注册机制)
 
-# --- 分支选择 ---
+# --- 分支、融合与头模块选择 ---
 continuum_branch_name: 'FrequencyMoEBranch'
 normalized_branch_name: 'LineAttentionBranch'
+fusion_name: 'GeneralFusion'
+head_name: 'LSTM_FFN_Head'
 
 # --- 分支参数配置 ---
 continuum_branch_config:
@@ -28,15 +26,19 @@ normalized_branch_config:
     - {out_channels: 64, kernel_size: 3, pool_size: 2, se_reduction: 8}
     - {out_channels: 128, kernel_size: 3, pool_size: 2, se_reduction: 16}
 
-# --- 融合与预测头配置 ---
-fusion_module_config:
+# --- 融合模块参数配置 ---
+fusion_config:
+  strategy: 'concat'
+  # dim_norm and dim_cont will be added dynamically by the model
+
+# --- 头模块参数配置 ---
+head_config:
+  # head_input_dim will be added dynamically by the model
   lstm_hidden_dim: 128
   lstm_layers: 2
-  dropout_rate: 0.2
-  ffn:
-    - {out_features: 128}
-    - {out_features: 64}
-    - {out_features: 4, is_output_layer: True}
+  dropout: 0.2
+  prediction_head:
+    hidden_layers: [128, 64]
 
 # --- 通用设置 ---
 normalization_type: "batchnorm"

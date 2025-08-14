@@ -1,9 +1,10 @@
+# DualSpectralNet 配置文件 (v4, 使用分支、融合和头注册机制)
 
-# DualSpectralNet 配置文件 (v2, 使用分支注册机制)
-
-# --- 分支选择 ---
+# --- 分支、融合与头模块选择 ---
 continuum_branch_name: 'CNNTransformerBranch'
 normalized_branch_name: 'MultiScaleCNNBranch'
+fusion_name: 'CrossAttentionFusion'
+head_name: 'SimpleFFN_Head'
 
 # --- 分支参数配置 ---
 continuum_branch_config:
@@ -27,12 +28,16 @@ normalized_branch_config:
     - {out_channels: 32, kernel_sizes: [3, 5, 7], use_attention: true, downsample: true, pool_size: 2}
     - {out_channels: 64, kernel_sizes: [3, 5, 7], use_attention: true, downsample: true, pool_size: 2}
 
-# --- 融合与预测头配置 ---
+# --- 融合模块参数配置 ---
 fusion_config:
+  # dim_cont, dim_norm 将由代码动态计算
   hidden_dim: 128
   num_heads: 4
   dropout: 0.1
 
-prediction_head_config:
-  hidden_dims: [256, 128]
+# --- 头模块参数配置 ---
+head_config:
+  # input_dim 将由代码动态计算 (等于 fusion 模块的 output_dim)
+  fc_hidden_dims: [256, 128]
   dropout: 0.2
+  use_batch_norm: true

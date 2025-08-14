@@ -1,4 +1,3 @@
-
 # 恒星光谱参数预测任务 (Stellar Spectral Parameter Prediction Task)
 
 本项目是一个专注于恒星光谱参数预测的深度学习框架。其核心任务是通过分析恒星光谱数据，精准地估计恒星的关键物理参数，包括有效温度(Teff)、表面重力(log g)、金属丰度([Fe/H])和碳丰度([C/Fe])。
@@ -34,15 +33,18 @@
 ## 🚀 快速开始
 
 ### 1. 环境准备
+
 ```bash
 # 确保已安装PyTorch及其他核心库
 pip install torch pandas numpy pyyaml scikit-learn
 ```
 
 ### 2. 数据准备
+
 将您的光谱数据文件放置在 `dataset/spectral/` 目录下。
 
 ### 3. 模型训练
+
 通过执行对应模型的shell脚本来启动训练。例如，训练 `FreqInceptionNet`：
 
 ```bash
@@ -52,11 +54,13 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 # 在后台启动训练
 ./scripts/spectral_prediction/run_freqinceptionnet.sh
 ```
+
 训练日志将保存在 `logs/` 目录下，模型检查点将保存在 `checkpoints/` 目录下。
 
 ## 🧠 支持的光谱预测模型
 
 ### 1. DualSpectralNet
+
 - **特点**: 一个强大的双分支网络，结合了CNN和Transformer的优势。
   - **连续谱分支**: 使用CNN提取局部特征，再通过Transformer捕捉长距离依赖关系。
   - **吸收线分支**: 使用多尺度CNN（Multi-Scale CNN）来精细化提取吸收线的结构特征。
@@ -65,6 +69,7 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 - **适用场景**: 需要同时捕捉光谱的全局趋势和局部精细特征的复杂任务。
 
 ### 2. FreqInceptionNet
+
 - **特点**: 一个创新的双分支网络，从频域和时域（空域）两个角度分析光谱。
   - **频率分支**: 将连续谱通过FFT变换到频域，再用CNN进行下采样和特征提取，专注于分析周期性和全局性特征。
   - **Inception分支**: 采用Google的Inception网络结构，通过不同大小的卷积核并行提取归一化谱的多尺度特征，并结合通道注意力（SE Block）进行特征增强。
@@ -75,12 +80,15 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 ## 🔧 自定义与扩展
 
 ### 1. 添加新模型
+
 在 `models/spectral_prediction/` 目录下创建您的模型文件，并参考现有模型使用 `@register_model('YourModelName')` 进行注册。
 
 ### 2. 修改模型配置
+
 直接编辑 `conf/` 目录下的YAML文件，即可调整模型的架构参数（如通道数、卷积核大小、是否使用BatchNorm等）和超参数，无需修改代码。
 
 ### 3. 调整训练脚本
+
 `scripts/spectral_prediction/` 中的 `.sh` 脚本是训练的入口。您可以复制并修改它们，以定义不同的实验（如调整学习率、批次大小等）。
 
 ## 📄 许可证
@@ -88,6 +96,7 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 本项目遵循MIT许可证 - 详见 [LICENSE](LICENSE) 文件。
 
 ---
+
 *最后更新: 2025-08-05*
 
 ---
@@ -108,7 +117,7 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 
 #### 使用方法:
 
-- **执行光谱预测任务**: 
+- **执行光谱预测任务**:
   ```bash
   bash scripts/spectral_prediction/run_customfusionnet_spectral.sh
   ```
@@ -153,3 +162,48 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
   ```bash
   # 你可以模仿其他脚本，为此模型创建一个回归任务的训练脚本
   ```
+
+### 4. 灵活的数据增强流水线
+
+本项目集成了一套强大且高度可配置的数据增强框架，用于在训练时动态处理数据，以抑制过拟合、提升模型泛化能力。
+
+- **配置驱动**: 所有数据增强的启用、参数和应用概率都在 `conf/stats.yaml` 文件中统一配置。
+- **即插即用**: 通过注册器模式，可以轻松地在 `utils/augmentations.py` 文件中添加新的自定义增强方法。
+
+#### 配置方法
+
+在 `conf/stats.yaml` 文件末尾，可以找到或添加 `augs_conf` 配置块。它是一个列表，每一项代表一个增强操作：
+
+```yaml
+# conf/stats.yaml
+
+# ... (省略前面的统计数据) ...
+
+# --- Data Augmentation Settings ---
+augs_conf:
+  # 增强操作一：添加高斯噪声
+  - name: 'add_noise'
+    enabled: true         # 开关：true表示启用此增强
+    p: 0.5                # 应用概率：每个样本有50%的几率应用此增强
+    params: {sigma: 0.01} # 传递给增强类的参数
+  
+  # 增强操作二：随机平移
+  - name: 'random_shift'
+    enabled: true
+    p: 0.5
+    params: {max_shift: 2}
+
+  # 增强操作三：随机缩放 (当前被关闭)
+  - name: 'random_scaling'
+    enabled: false
+    p: 0.3
+    params: {min_scale: 0.9, max_scale: 1.1}
+```
+
+#### 如何添加新的增强方法
+
+1. 打开 `utils/augmentations.py` 文件。
+2. 创建一个继承自 `Augmentation` 的新类。
+3. 实现 `__init__` (如果需要参数) 和 `__call__` (核心处理逻辑) 方法。
+4. 在类定义的上方，使用 `@register_augmentation('your_new_aug_name')` 装饰器进行注册。
+5. 在 `conf/stats.yaml` 的 `augs_conf` 列表中加入新方法的配置即可。
