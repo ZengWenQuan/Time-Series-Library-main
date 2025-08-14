@@ -14,7 +14,7 @@ head_name: 'LSTM_FFN_Head'
 
 # --- 分支参数配置 ---
 normalized_branch_config:
-  pyramid_channels: [8, 8, 16]
+  pyramid_channels: [32, 32, 16]
   kernel_sizes: [3, 5, 7]
   pool_size: 2
   batch_norm: false
@@ -27,8 +27,8 @@ continuum_branch_config:
   batch_norm: false
   cnn:
     layers:
-      - {out_channels_per_path: 8, pool_size: 2}
-      - {out_channels_per_path: 8, pool_size: 2}
+      - {out_channels_per_path: 16, pool_size: 2}
+      - {out_channels_per_path: 16, pool_size: 2}
 
 # --- 融合模块参数配置 ---
 fusion_config:
@@ -39,8 +39,8 @@ fusion_config:
 # --- 头模块参数配置 ---
 head_config:
   # lstm_input_dim will be added dynamically by the model
-  lstm_hidden_dim: 64
+  lstm_hidden_dim: 32
   lstm_layers: 2
   dropout: 0.3
   prediction_head:
-    hidden_layers: [128, 64]
+    hidden_layers: [32, 16]
