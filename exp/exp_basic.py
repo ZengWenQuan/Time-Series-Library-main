@@ -73,19 +73,40 @@ class Exp_Basic(object):
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         
-        info_model=self.args.run_dir+'/model.txt'
-        with open(info_model,'w') as f:
-            # 写入模型结构
+        # --- Model Summary Logic ---
+        info_model_path = os.path.join(self.args.run_dir, 'model.txt')
+        with open(info_model_path, 'w') as f:
             f.write("模型结构:\n")
             f.write(f"{model}\n\n")
             
-            # 写入每层参数数量
-            f.write("每层参数数量:\n")
-            sum_param=0
-            for name, param in model.named_parameters():                
+            # --- Per-Submodule Parameter Count ---
+            f.write("模块参数量:\n")
+            total_params = sum(p.numel() for p in model.parameters())
+            model_to_inspect = model.module if isinstance(model, nn.DataParallel) else model
+            
+            submodule_attrs = [
+                'continuum_branch',
+                'normalized_branch',
+                'fusion',
+                'prediction_head'
+            ]
+            
+            # Check for submodule existence and count their parameters
+            for attr in submodule_attrs:
+                if hasattr(model_to_inspect, attr):
+                    submodule = getattr(model_to_inspect, attr)
+                    if isinstance(submodule, nn.Module):
+                        submodule_params = sum(p.numel() for p in submodule.parameters())
+                        if submodule_params > 0:
+                            f.write(f"  - {attr}: {submodule_params:,} 参数\n")
+            
+            f.write(f"\n总参数量: {total_params:,}\n\n")
+
+            # --- Per-Layer Parameter Count (Original Logic) ---
+            f.write("每层详细参数:\n")
+            for name, param in model.named_parameters():
                 f.write(f"  {name}: {param.numel():,} 参数\n")
-                sum_param+=param.numel()
-            f.write(f'总参数量：{sum_param}')
+
         return model
 
     def _acquire_device(self):

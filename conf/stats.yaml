@@ -61,9 +61,9 @@ augs_conf:
     params: {sigma: 0.01}
   
   - name: 'random_shift'
-    enabled: false
+    enabled: true
     p: 0.5
-    params: {max_shift: 2}
+    params: {max_shift: 10}
 
   - name: 'random_scaling'
     enabled: false # 此项被关闭，将不会被加载
