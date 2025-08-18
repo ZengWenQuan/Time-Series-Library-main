@@ -234,12 +234,7 @@ if __name__ == '__main__':
             print("警告: split_ratio 参数格式错误，使用默认值 [0.8, 0.1, 0.1]")
             args.split_ratio = [0.8, 0.1, 0.1]
     
-    if hasattr(args, 'targets') and isinstance(args.targets, str):
-        try:
-            args.targets = ast.literal_eval(args.targets)
-        except (ValueError, SyntaxError):
-            print("警告: targets 参数格式错误，使用默认值 ['Teff', 'logg', 'FeH', 'CFe']")
-            args.targets = ['Teff', 'logg', 'FeH', 'CFe']
+    
     
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))

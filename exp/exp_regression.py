@@ -21,7 +21,7 @@ class Exp_Regression(Exp_Basic):
     def _get_data(self):
         self.train_data, self.train_loader = data_provider(self.args, 'train',feature_scaler= self.feature_scaler,label_scaler= self.label_scaler)
         self.vali_data, self.vali_loader = data_provider(self.args, 'val',feature_scaler= self.feature_scaler, label_scaler=self.label_scaler)
-        self.test_data, self.test_loader = data_provider(self.args, 'test', feature_scaler=self.feature_scaler,label_scaler= self.label_scaler)
+        self.test_data, self.test_loader = data_provider(self.args, 'test', feature_scaler=self.feature_scaler,label_scaler= self.label_scaler) if os.path.exists(os.path.join(self.args.root_path, 'test')) else (None, None)
 
     # --- 清理后的、唯一的 Scaler 加载逻辑 ---
     def get_feature_scaler(self):

@@ -46,4 +46,5 @@ training_settings:
   loss_function: 'mse'
   loss_weights: [1.0, 1.0, 1.0, 1.0]
   lradj: 'cos'
+  targets: ['Teff', 'logg', 'FeH', 'CFe']
   mixed_precision: True

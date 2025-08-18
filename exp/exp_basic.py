@@ -43,6 +43,7 @@ class Exp_Basic(object):
                 training_settings = model_config.get('training_settings', {})
                 self.args.loss = training_settings.get('loss_function', self.args.loss)
                 self.args.lradj = training_settings.get('lradj', self.args.lradj)
+                self.args.targets = training_settings.get('targets', self.args.targets)
                 self.args.loss_weights = training_settings.get('loss_weights', [1,1,1,1])
                 
                 self.args.use_amp = training_settings.get('mixed_precision', True)
@@ -268,10 +269,6 @@ class Exp_Basic(object):
             avg_grad_norm = np.mean(epoch_grad_norms)
             cost_time = time.time() - epoch_time
             remaining_time = cost_time * (self.args.train_epochs - epoch - 1)
-            
-            cost_mins, cost_secs = divmod(int(cost_time), 60)
-            rem_hrs, rem_rest = divmod(int(remaining_time), 3600)
-            rem_mins, rem_secs = divmod(rem_rest, 60)
 
             current_lr = model_optim.param_groups[0]['lr']
             history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
@@ -279,7 +276,7 @@ class Exp_Basic(object):
             log_msg = f"Epoch: {epoch + 1} /{self.args.train_epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
-            log_msg += f" | Time: {cost_mins}m {cost_secs}s | ETA: {rem_hrs}h {rem_mins}m {rem_secs}s"
+            log_msg += f" | Time: {int(cost_time/60)}m {int(cost_time%60)}s | ETA: {int(remaining_time/3600)}h {int(remaining_time/60%60)}m {int(remaining_time%60)}s"
             self.logger.info(log_msg)
             
             # --- Log to MLflow ---

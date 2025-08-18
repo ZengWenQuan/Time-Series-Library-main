@@ -20,6 +20,7 @@ fusion_config:
 
 # --- 头模块参数配置 ---
 head_config:
+  use_separate_heads: True
   # ffn_input_dim 将由代码动态计算
   fc_hidden_dims: [512, 256, 128]
   dropout: 0.2
@@ -29,4 +30,5 @@ training_settings:
   loss_function: 'mse'
   loss_weights: [1.0, 1.0, 1.0, 1.0]
   lradj: 'cos'
+  targets: ['Teff', 'logg', 'FeH', 'CFe']
   mixed_precision: True

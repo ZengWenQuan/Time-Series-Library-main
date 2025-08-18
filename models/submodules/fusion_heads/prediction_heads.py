@@ -45,6 +45,18 @@ class FFNHead(nn.Module):
         super(FFNHead, self).__init__()
         self.targets = targets
         self.label_size = label_size
+        self.use_separate_heads = config.get('use_separate_heads', False)
+
+        if self.use_separate_heads:
+            self.prediction_heads = nn.ModuleList()
+            for _ in range(self.label_size):
+                self.prediction_heads.append(self._create_ffn_block(config, 1))
+        else:
+            self.prediction_head = self._create_ffn_block(config, self.label_size)
+        
+        self._initialize_weights()
+
+    def _create_ffn_block(self, config, output_dim):
         fc_layers = []
         current_dim = config['ffn_input_dim']
         for hidden_dim in config['fc_hidden_dims']:
@@ -54,14 +66,20 @@ class FFNHead(nn.Module):
             fc_layers.append(nn.ReLU(inplace=True))
             fc_layers.append(nn.Dropout(config.get('dropout', 0.2)))
             current_dim = hidden_dim
-        fc_layers.append(nn.Linear(current_dim, self.label_size))
-        self.ffn = nn.Sequential(*fc_layers)
-        self._initialize_weights()
+        fc_layers.append(nn.Linear(current_dim, output_dim))
+        return nn.Sequential(*fc_layers)
 
     def forward(self, x):
-        return self.ffn(x)
+        if self.use_separate_heads:
+            predictions = [head(x) for head in self.prediction_heads]
+            return torch.cat(predictions, dim=1)
+        else:
+            return self.prediction_head(x)
 
     def _initialize_weights(self):
-        for m in self.ffn.modules():
-            if isinstance(m, nn.Linear): init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm1d): init.constant_(m.weight, 1); init.constant_(m.bias, 0)
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm1d):
+                init.constant_(m.weight, 1)
+                init.constant_(m.bias, 0)
