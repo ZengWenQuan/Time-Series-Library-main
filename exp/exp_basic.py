@@ -228,7 +228,7 @@ class Exp_Basic(object):
                 if self.scaler is not None:
                     with torch.amp.autocast('cuda'):
                         outputs = self.model(batch_x.float().to(self.device))
-                        loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i] for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
+                        loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
                     
                     self.scaler.scale(loss).backward()
                     # 先反缩放，再做梯度裁剪和记录，避免因为缩放因子导致的梯度数值虚高
@@ -239,7 +239,7 @@ class Exp_Basic(object):
                 else:
                     # Standard training
                     outputs = self.model(batch_x.float().to(self.device))
-                    loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i] for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
+                    loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
                     loss.backward()
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
                     model_optim.step()
@@ -250,7 +250,12 @@ class Exp_Basic(object):
             # --- Evaluation (Structure preserved as requested) ---
             train_loss_avg = np.average(train_loss)
             vali_loss, vali_preds, vali_trues = self.vali(self.vali_data, self.vali_loader, criterion)
-            test_loss, test_preds, test_trues = self.vali(self.test_data, self.test_loader, criterion)
+
+            if self.test_loader:
+                test_loss, test_preds, test_trues = self.vali(self.test_data, self.test_loader, criterion)
+            else:
+                test_loss, test_preds, test_trues = None, None, None
+
             train_eval_loss, train_preds, train_trues = self.vali(self.train_data, self.train_loader, criterion)
 
             # --- Metric Processing (Refactored into new function) ---
