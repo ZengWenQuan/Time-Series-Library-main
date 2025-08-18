@@ -87,7 +87,7 @@ python -u run.py \
   --feature_size ${FEATURE_SIZE} \
   --label_size ${LABEL_SIZE} \
   --model_conf "${MODEL_CONF}" \
-  --targets "${TARGETS}" \
+  
   --split_ratio 0.8,0.1,0.1 \
   --features_scaler_type "standard" \
   --label_scaler_type "standard" \
@@ -126,7 +126,7 @@ if [ $? -eq 0 ]; then
       --feature_size ${FEATURE_SIZE} \
       --label_size ${LABEL_SIZE} \
       --model_conf "${MODEL_CONF}" \
-      --targets "${TARGETS}" \
+      
       --split_ratio 0.8,0.1,0.1 \
       --features_scaler_type "standard" \
       --label_scaler_type "standard" \

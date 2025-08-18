@@ -45,7 +45,7 @@ python -u run.py \
   --feature_size ${FEATURE_SIZE} \
   --label_size ${LABEL_SIZE} \
   --stats_path conf/stats.yaml \
-  --targets "${TARGETS}" \
+  
   --train_epochs ${TRAIN_EPOCHS} \
   --batch_size ${BATCH_SIZE} \
   --patience ${PATIENCE} \

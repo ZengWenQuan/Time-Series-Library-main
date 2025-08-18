@@ -19,7 +19,7 @@ python -u run.py \
   --features M \
   --feature_size 4700 \
   --label_size 4 \
-  --targets "['Teff', 'logg', 'FeH', 'CFe']" \
+  
   \
   --des 'Training TwoBranchTeffNet model' \
   --itr 1 \

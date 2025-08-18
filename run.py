@@ -92,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--apply_inverse_transform', type=int, default=0, help='whether to apply inverse transform on the output')
     parser.add_argument('--label_scaler_type', type=str, default='standard', help='scaler type for label')
     parser.add_argument('--split_ratio', type=str, default='[0.8, 0.1, 0.1]', help='train/val/test split ratio')
-    parser.add_argument('--targets', type=str, default="['Teff', 'logg', 'FeH', 'CFe']", help='target columns for regression')
+    
     parser.add_argument('--features_scaler_type', type=str, default='standard', help='scaler type for features')
     
     # FeH采样相关参数

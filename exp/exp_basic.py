@@ -2,7 +2,6 @@ import os
 import torch
 import torch.nn as nn
 import time
-from utils.losses import RegressionFocalLoss
 from utils.tools import EarlyStopping
 from utils.augmentations import Transforms
 from utils.stellar_metrics import save_history_plot
@@ -28,31 +27,36 @@ def register_model(name):
 class Exp_Basic(object):
     def __init__(self, args):
         self.args = args
-        self.targets = args.targets
         self.device = self._acquire_device()
         self._setup_logger()
-        self.args.loss='mae'
-        self.args.use_amp=True
-        self.args.lradj='cos'
-        # --- ADDED: Read training settings from model_conf.yaml ---
-        if hasattr(self.args, 'model_conf') and self.args.model_conf and os.path.exists(self.args.model_conf):
-            try:
-                with open(self.args.model_conf, 'r') as f:
-                    model_config = yaml.safe_load(f)
-                
-                training_settings = model_config.get('training_settings', {})
-                self.args.loss = training_settings.get('loss_function', self.args.loss)
-                self.args.lradj = training_settings.get('lradj', self.args.lradj)
-                self.args.targets = training_settings.get('targets', self.args.targets)
-                self.args.loss_weights = training_settings.get('loss_weights', [1,1,1,1])
-                
-                self.args.use_amp = training_settings.get('mixed_precision', True)
 
-            except Exception as e:
-                self.logger.error(f"Error processing model config file: {e}")
-                self.args.loss_weights = None # Ensure default on error
-        else:
-            self.args.loss_weights = None # Ensure default if no file
+        # --- 从 model_conf.yaml 加载设置 ---
+        if not hasattr(self.args, 'model_conf') or not self.args.model_conf or not os.path.exists(self.args.model_conf):
+            raise FileNotFoundError(f"必须通过 --model_conf 提供一个有效的模型配置文件路径。")
+
+        try:
+            with open(self.args.model_conf, 'r') as f:
+                model_config = yaml.safe_load(f)
+            
+            training_settings = model_config.get('training_settings', {})
+            
+            # --- 强制从 YAML 文件中获取 'targets' ---
+            if 'targets' in training_settings:
+                # PyYAML 会自动将 yaml 列表转为 python 列表
+                self.targets = training_settings['targets']
+                self.args.targets = self.targets  # 保持 args 对象同步
+            else:
+                raise ValueError(f"配置文件 {self.args.model_conf} 的 'training_settings' 中必须提供 'targets' 键。")
+
+            # --- 加载其他设置（如果不存在则使用默认值） ---
+            self.args.loss = training_settings.get('loss_function', 'mae')
+            self.args.lradj = training_settings.get('lradj', 'cos')
+            self.args.loss_weights = training_settings.get('loss_weights', [1,1,1,1])
+            self.args.use_amp = training_settings.get('mixed_precision', True)
+
+        except Exception as e:
+            self.logger.error(f"处理模型配置文件 '{self.args.model_conf}' 时出错: {e}")
+            raise  # 重新抛出异常，中断程序
 
         # --- ADDED: Initialize GradScaler for AMP ---
         self.scaler = None
