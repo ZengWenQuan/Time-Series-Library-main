@@ -301,7 +301,7 @@ class Exp_Basic(object):
                     print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
                 if vali_reg_metrics:
                     print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
-                if test_reg_metrics:
+                if locals().get('test_reg_metrics',None):
                     print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")
                 if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None:
                     print(f"Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
@@ -311,8 +311,8 @@ class Exp_Basic(object):
                 epoch=epoch,
                 train_metrics=train_reg_metrics,
                 vali_metrics=vali_reg_metrics,
-                test_metrics=test_reg_metrics,
-                combined_metrics=locals().get('combined_reg_metrics')
+                test_metrics=locals().get('test_reg_metrics',None),
+                combined_metrics=locals().get('combined_reg_metrics',None)
             )
 
             # --- Early Stopping & Best Model Logic ---
