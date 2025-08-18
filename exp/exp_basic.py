@@ -262,7 +262,8 @@ class Exp_Basic(object):
             # Process and save "latest" metrics
             train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
             vali_reg_metrics = self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "latest")
-            test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
+            if self.test_loader:
+                test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
             
             # Manually combine val+test for combined metrics
             if test_preds is not None:
@@ -281,7 +282,7 @@ class Exp_Basic(object):
             log_msg = f"Epoch: {epoch + 1} /{self.args.train_epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
-            log_msg += f" | Time: {int(cost_time/60)}m {int(cost_time%60)}s | ETA: {int(remaining_time/3600)}h {int(remaining_time/60%60)}m {int(remaining_time%60)}s"
+            log_msg += f" | Time: {int(cost_time/60)}m {int(cost_time%60)}s | ETA: {int(remaining_time/3600)}h {int(( remaining_time/60) %60)}m {int(remaining_time)%60}s"
             self.logger.info(log_msg)
             
             # --- Log to MLflow ---
