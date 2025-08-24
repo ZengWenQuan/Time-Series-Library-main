@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from ...registries import register_normalized_branch
 
 class PyramidBlock(nn.Module):
     def __init__(self, config):
@@ -45,7 +46,6 @@ class PyramidBlock(nn.Module):
             if isinstance(m, nn.Conv1d): init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm1d): init.constant_(m.weight, 1); init.constant_(m.bias, 0)
 
-from . import register_normalized_branch
 
 @register_normalized_branch
 class UpsampleMultiScaleBranch(nn.Module):

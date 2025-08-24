@@ -23,7 +23,7 @@ class InceptionBlock(nn.Module):
         x3 = F.relu(self.path3(x))
         return torch.cat([x1, x2, x3], dim=1)
 
-from . import register_continuum_branch
+from ...registries import register_continuum_branch
 
 @register_continuum_branch
 class ContinuumWaveletBranch(nn.Module):
@@ -42,12 +42,10 @@ class ContinuumWaveletBranch(nn.Module):
             in_channels = block.output_channels
         
         self.cnn = nn.Sequential(*cnn_layers)
-        self.pool = nn.AdaptiveAvgPool1d(1)
         self.output_dim = in_channels
 
     def forward(self, x):
         x = x.unsqueeze(1)
         coeffs_low, _ = self.dwt(x)
         features = self.cnn(coeffs_low)
-        output = self.pool(features)
-        return output.squeeze(-1)
+        return features

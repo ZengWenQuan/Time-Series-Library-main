@@ -18,8 +18,6 @@ python -u run.py \
   --patience 20000 \
   --batch_size 64 \
   --learning_rate 0.0001 \
-  --loss 'mse' \
-  --lradj 'cosine' \
   --train_epochs 5 \
   --use_gpu True \
   --vali_interval 1\

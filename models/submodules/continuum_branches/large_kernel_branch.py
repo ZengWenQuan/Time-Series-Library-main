@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import register_continuum_branch
+from ...registries import register_continuum_branch
 
 @register_continuum_branch
 class LargeKernelBranch(nn.Module):

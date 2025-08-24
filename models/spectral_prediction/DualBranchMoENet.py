@@ -3,13 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import yaml
-from exp.exp_basic import register_model
 
-from ..submodules.continuum_branches import CONTINUUM_BRANCH_REGISTRY
-from ..submodules.normalized_branches import NORMALIZED_BRANCH_REGISTRY
-from ..submodules.fusion_heads import FUSION_REGISTRY, HEAD_REGISTRY
+from ..registries import (
+    register_model,
+    CONTINUUM_BRANCH_REGISTRY,
+    NORMALIZED_BRANCH_REGISTRY,
+    FUSION_REGISTRY,
+    HEAD_REGISTRY
+)
 
-@register_model('DualBranchMoENet')
+@register_model
 class DualBranchMoENet(nn.Module):
     def __init__(self, configs):
         super(DualBranchMoENet, self).__init__()

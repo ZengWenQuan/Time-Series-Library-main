@@ -34,6 +34,13 @@ class Exp_Spectral_Prediction(Exp_Basic):
         self.feature_scaler=self.get_feature_scaler()
         self._get_data()
 
+        # 从数据加载器中取一个样本
+        sample_batch, _, _ = next(iter(self.train_loader))
+        sample_batch = sample_batch.float().to(self.device)
+
+        # 将样本传递给模型构建函数
+        self.model = self._build_model(sample_batch=sample_batch)
+
     def _get_data(self):
         self.train_data, self.train_loader = data_provider(args=self.args,flag='train', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
         self.vali_data, self.vali_loader = data_provider(args=self.args,flag='val', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)

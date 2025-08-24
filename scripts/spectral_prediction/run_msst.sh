@@ -23,7 +23,6 @@ STATS_PATH="conf/stats.yaml" # 引用通用的统计数据文件
 # 注意: 模型会自动处理padding，feature_size无需特殊设置
 FEATURE_SIZE=4800 
 LABEL_SIZE=4
-TARGETS="['Teff','logg','FeH','CFe']" # 必须不能留空格
 split_ratio='[0.8,0.2,0]' # 必须不能留空格
 
 # --- 训练超参数 ---
@@ -31,7 +30,6 @@ TRAIN_EPOCHS=355
 BATCH_SIZE=64
 PATIENCE=10000
 LEARNING_RATE=0.0001
-LR_ADJUST='cos'
 
 # --- 环境设置 ---
 USE_GPU=True
@@ -58,8 +56,6 @@ python -u run.py \
   --batch_size ${BATCH_SIZE} \
   --patience ${PATIENCE} \
   --learning_rate ${LEARNING_RATE} \
-  --lradj ${LR_ADJUST} \
   --use_gpu ${USE_GPU} \
-  --use_amp \
   --gpu ${GPU_ID} \
   --des "${MODEL_NAME}_experiment"

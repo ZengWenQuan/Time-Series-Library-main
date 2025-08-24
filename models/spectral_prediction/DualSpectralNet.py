@@ -1,12 +1,16 @@
 import torch
 import torch.nn as nn
 import yaml
-from exp.exp_basic import register_model
-from ..submodules.continuum_branches import CONTINUUM_BRANCH_REGISTRY
-from ..submodules.normalized_branches import NORMALIZED_BRANCH_REGISTRY
-from ..submodules.fusion_heads import FUSION_REGISTRY, HEAD_REGISTRY
 
-@register_model('DualSpectralNet')
+from ..registries import (
+    register_model,
+    CONTINUUM_BRANCH_REGISTRY,
+    NORMALIZED_BRANCH_REGISTRY,
+    FUSION_REGISTRY,
+    HEAD_REGISTRY
+)
+
+@register_model
 class DualSpectralNet(nn.Module):
     def __init__(self, configs):
         super(DualSpectralNet, self).__init__()

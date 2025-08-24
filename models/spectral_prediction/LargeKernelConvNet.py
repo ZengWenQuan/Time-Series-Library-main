@@ -3,13 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import yaml
-from exp.exp_basic import register_model
 
-from ..submodules.continuum_branches import CONTINUUM_BRANCH_REGISTRY
-from ..submodules.normalized_branches import NORMALIZED_BRANCH_REGISTRY
-from ..submodules.fusion_heads import HEAD_REGISTRY, FUSION_REGISTRY
+from ..registries import (
+    register_model,
+    CONTINUUM_BRANCH_REGISTRY,
+    NORMALIZED_BRANCH_REGISTRY,
+    FUSION_REGISTRY,
+    HEAD_REGISTRY
+)
 
-@register_model('LargeKernelConvNet')
+@register_model
 class LargeKernelConvNet(nn.Module):
     def __init__(self, configs):
         super(LargeKernelConvNet, self).__init__()
@@ -19,18 +22,22 @@ class LargeKernelConvNet(nn.Module):
 
         # Branches
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-        self.upsample_branch = NormBranchClass(model_config['upsample_branch_config'])
+        self.upsample_branch = NormBranchClass(model_config['normalized_branch_config'])
         
         if self.task_name == 'spectral_prediction':
             ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-            self.large_kernel_branch = ContBranchClass(model_config['large_kernel_branch_config'])
+            self.large_kernel_branch = ContBranchClass(model_config['continuum_branch_config'])
             
             # Fusion
             FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
-            fusion_config = model_config['fusion_config']
-            fusion_config['dim_norm'] = self.upsample_branch.output_dim
-            fusion_config['dim_cont'] = self.large_kernel_branch.output_dim
-            self.fusion = FusionClass(fusion_config)
+            if FusionClass.__name__ == 'ConcatFusion':
+                self.fusion = FusionClass()
+                self.fusion.output_dim = self.upsample_branch.output_dim + self.large_kernel_branch.output_dim
+            else:
+                fusion_config = model_config['fusion_config']
+                fusion_config['dim_norm'] = self.upsample_branch.output_dim
+                fusion_config['dim_cont'] = self.large_kernel_branch.output_dim
+                self.fusion = FusionClass(fusion_config)
             head_input_dim = self.fusion.output_dim
         else: # regression
             head_input_dim = self.upsample_branch.output_dim

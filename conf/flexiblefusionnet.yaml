@@ -1,0 +1,68 @@
+# FlexibleFusionNet 配置文件
+
+# --- 新增：定义可复用的锚点 ---
+anchor_vars:
+  branch_out_channels: &branch_c 64
+  branch_in_len: &branch_l 4800
+  # 定义一个统一的目标输出长度
+  target_len: &target_l 256
+
+# 1. 训练设置 (遵循项目现有格式)
+training_settings:
+  targets: ['Teff', 'logg', 'FeH', 'CFe']
+  loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.5, 1.2]
+  lradj: 'cos'
+  mixed_precision: True
+
+# --- 分支与头模块选择 ---
+continuum_branch_name: 'CustomMoEBranch'
+normalized_branch_name: 'MultiScalePyramidBranch'
+fusion_name: 'FusionModule'
+head_name: 'MultiTaskHead'
+
+initialize_lazy: True
+# 2. 连续谱分支配置 (CustomMoEBranch)
+continuum_branch_config:
+  fft:
+    n_fft: 512
+    hop_length: 128
+  moe:
+    num_experts: 4
+    k: 2
+    gating_hidden_dim: 64
+  input_len: *branch_l
+  expert_config:
+    in_channels: 1
+    input_len: *branch_l
+    target_output_length: *target_l # <-- 指定专家的目标输出长度
+    pyramid_layers:
+      - {out_channels: 16, kernel_sizes: [3, 5], pool_size: 2}
+      - {out_channels: 32, kernel_sizes: [3, 5], pool_size: 2}
+      - {out_channels: *branch_c, kernel_sizes: [3, 5], pool_size: 2}
+
+# 3. 归一化谱分支配置 (MultiScalePyramidBranch)
+normalized_branch_config:
+  in_channels: 1
+  input_len: *branch_l
+  target_output_length: *target_l # <-- 指定分支的目标输出长度
+  pyramid_layers:
+    - {out_channels: 16, kernel_sizes: [3, 5, 7], pool_size: 2}
+    - {out_channels: 32, kernel_sizes: [3, 5, 7], pool_size: 2}
+    - {out_channels: *branch_c, kernel_sizes: [3, 5, 7], pool_size: 2}
+
+# 4. 融合模块配置
+fusion_config:
+  strategy: 'concat'
+  channels: *branch_c
+
+# 5. 预测头配置 (MultiTaskHead)
+head_config:
+  conv_pyramid:
+    # concat策略, in_channels = C1+C2 = 64+64 = 128
+    in_channels: *branch_c 
+    layers:
+      - {out_channels: 128, kernel_size: 3, pool_size: 2}
+      - {out_channels: 256, kernel_size: 3, pool_size: 2}
+  ffn_layers: [256, 128]
+  dropout: 0.3

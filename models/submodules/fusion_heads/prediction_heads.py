@@ -2,15 +2,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.init as init
-from . import register_head
+from ...registries import register_head
 
-@register_head('LSTM_FFN_Head')
+@register_head
 class LSTMHead(nn.Module):
     """通用的 LSTM + FFN 预测头"""
     def __init__(self, config, targets):
         super(LSTMHead, self).__init__()
         self.targets = targets
-        self.bilstm = nn.LSTM(config['lstm_input_dim'], config['lstm_hidden_dim'], config['lstm_layers'], batch_first=True, bidirectional=True, dropout=config.get('dropout', 0.2))
+        self.bilstm = nn.LSTM(config['head_input_dim'], config['lstm_hidden_dim'], config['lstm_layers'], batch_first=True, bidirectional=True, dropout=config.get('dropout', 0.2))
         
         head_input_dim = config['lstm_hidden_dim'] * 2
         self.prediction_heads = nn.ModuleDict()
@@ -24,6 +24,9 @@ class LSTMHead(nn.Module):
         self._initialize_weights()
 
     def forward(self, x):
+        # 新增：将输入的 (B, C, L) 格式转为LSTM需要的 (B, L, C) 格式
+        x = x.transpose(1, 2)
+
         # x可以是融合后的序列 [B, L, D_fused] 或 单分支序列 [B, L, D_branch]
         lstm_out, _ = self.bilstm(x)
         final_features = lstm_out[:, -1, :]
@@ -38,7 +41,7 @@ class LSTMHead(nn.Module):
                     if len(param.shape) >= 2: init.orthogonal_(param.data)
                     else: init.normal_(param.data)
 
-@register_head('SimpleFFN_Head')
+@register_head
 class FFNHead(nn.Module):
     """简单的FFN预测头，用于已经提取了全局特征的场景"""
     def __init__(self, config, targets, label_size):

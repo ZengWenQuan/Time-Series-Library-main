@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import register_normalized_branch
+from ...registries import register_normalized_branch
 
 class MultiScaleBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_sizes, use_attention, use_batch_norm, dropout_rate):

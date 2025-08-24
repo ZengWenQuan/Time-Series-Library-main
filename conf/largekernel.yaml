@@ -1,38 +1,69 @@
+# LargeKernelConvNet 配置文件 (v5, refactored)
 
-# LargeKernelConvNet 配置文件 (v4, 使用分支、融合和头注册机制)
+# --- YAML Anchors ---
+anchor_vars:
+  # Output dimension of the vector branch (LargeKernelBranch)
+  vector_dim: &vec_d 64
+  # Output channel dimension of the sequence branch (UpsampleMultiScaleBranch)
+  sequence_channels: &seq_c 64
 
-# --- 分支与头模块选择 ---
+# --- Training Settings ---
+training_settings:
+  targets: ['Teff', 'logg', 'FeH', 'CFe']
+  loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.5, 1.2]
+  lradj: 'cos'
+  mixed_precision: True
+
+# --- Branch & Head Module Selection ---
 continuum_branch_name: 'LargeKernelBranch'
 normalized_branch_name: 'UpsampleMultiScaleBranch'
-fusion_name: 'GeneralFusion'
-head_name: 'LSTM_FFN_Head'
+# Using ConcatFusion to handle vector + sequence fusion
+fusion_name: 'ConcatFusion' 
+head_name: 'MultiTaskHead'
 
-# --- 分支参数配置 ---
-large_kernel_branch_config:
+initialize_lazy: True
+
+# --- Branch Configurations ---
+# Continuum Branch -> outputs a vector
+continuum_branch_config:
   kernel_size: 128
   stride: 16
-  out_channels: 64
-  fc_dim: 64
+  out_channels: 64 # Intermediate channels before FC layer
+  fc_dim: *vec_d
 
-upsample_branch_config:
+# Normalized Branch -> outputs a sequence
+normalized_branch_config:
   upsample_kernel: 4
-  pyramid_channels: [16, 32, 64]
+  pyramid_channels: [16, 32, *seq_c] # Final pyramid layer outputs sequence_channels
   kernel_sizes: [3, 5, 9]
   pool_size: 2
   batch_norm: false
   use_attention: true
   attention_reduction: 4
 
-# --- 融合模块参数配置 ---
-fusion_config:
+# --- Fusion Module Configuration ---
+# ConcatFusion does not require any parameters in its config
+fusion_config: 
   strategy: 'concat'
-  # dim_norm and dim_cont will be added dynamically by the model
+  channels: *branch_c
 
-# --- 头模块参数配置 ---
+# --- Head Module Configuration ---
+# 5. 预测头配置 (MultiTaskHead)
 head_config:
-  # head_input_dim will be added dynamically by the model
-  lstm_hidden_dim: 256
-  lstm_layers: 2
+  conv_pyramid:
+    # concat策略, in_channels = C1+C2 = 64+64 = 128
+    in_channels: *branch_c 
+    layers:
+      - {out_channels: 128, kernel_size: 3, pool_size: 2}
+      - {out_channels: 256, kernel_size: 3, pool_size: 2}
+  ffn_layers: [256, 128]
   dropout: 0.3
-  prediction_head:
-    hidden_layers: [128, 64]
+# head_config:
+#   # head_input_dim will be added dynamically by the model.
+#   # For ConcatFusion, it will be vector_dim + sequence_channels = 64 + 64 = 128
+#   lstm_hidden_dim: 256
+#   lstm_layers: 2
+#   dropout: 0.3
+#   prediction_head:
+#     hidden_layers: [128, 64]

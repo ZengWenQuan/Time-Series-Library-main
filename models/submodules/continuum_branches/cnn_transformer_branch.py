@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 import math
-from . import register_continuum_branch
+from ...registries import register_continuum_branch
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):

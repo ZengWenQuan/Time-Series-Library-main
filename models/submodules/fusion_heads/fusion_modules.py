@@ -1,10 +1,30 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import register_fusion
+from ...registries import register_fusion
 
-@register_fusion('ConcatFusion')
+class FeatureAdjuster(nn.Module):
+    """
+    A module to adjust the number of channels and sequence length of a feature tensor.
+    """
+    def __init__(self, in_channels, config):
+        super(FeatureAdjuster, self).__init__()
+        
+        # Adjust channels if out_channels is specified
+        out_channels = config.get('out_channels', in_channels)
+        self.channel_adjust = nn.Conv1d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else nn.Identity()
+        self.output_channels = out_channels
+
+        # Adjust length if out_len is specified
+        out_len = config.get('out_len')
+        self.length_adjust = nn.AdaptiveAvgPool1d(out_len) if out_len is not None else nn.Identity()
+
+    def forward(self, x):
+        x = self.channel_adjust(x)
+        x = self.length_adjust(x)
+        return x
+
+@register_fusion
 class ConcatFusion(nn.Module):
     """简单的拼接融合，可处理一个向量和一个序列的融合"""
     def forward(self, seq_features, vec_features):
@@ -14,32 +34,85 @@ class ConcatFusion(nn.Module):
         fused = torch.cat([seq_transposed, vec_expanded], dim=-1)
         return fused
 
-@register_fusion('GeneralFusion')
+@register_fusion
 class FusionModule(nn.Module):
-    """更通用的融合模块，支持add, concat, attention"""
+    """
+    通用融合模块 (v4)。
+    在融合前，使用可配置的 FeatureAdjuster 调整每个输入分支的通道数和长度。
+    支持 'add', 'concat', 'cross-attention' 策略。
+    """
     def __init__(self, config):
         super(FusionModule, self).__init__()
         self.strategy = config.get('strategy', 'concat').lower()
-        dim_norm, dim_cont = config['dim_norm'], config['dim_cont']
-        if self.strategy == 'add':
-            self.project_cont = nn.Linear(dim_cont, dim_norm)
-            self.output_dim = dim_norm
-        elif self.strategy == 'attention':
-            self.project_cont = nn.Linear(dim_cont, dim_norm)
-            self.attention = nn.MultiheadAttention(dim_norm, config.get('attention_heads', 4), batch_first=True)
-            self.output_dim = dim_norm
-        else: self.output_dim = dim_norm + dim_cont
+
+        # Create feature adjusters for each branch
+        self.adjuster_norm = FeatureAdjuster(config['dim_norm'], config.get('adjustment_config_norm', {}))
+        self.adjuster_cont = FeatureAdjuster(config['dim_cont'], config.get('adjustment_config_cont', {}))
+
+        # The number of channels after adjustment
+        adjusted_channels_norm = self.adjuster_norm.output_channels
+        adjusted_channels_cont = self.adjuster_cont.output_channels
+
+        # For 'add' and 'cross-attention', channels must match after adjustment
+        if self.strategy in ['add', 'cross-attention'] and adjusted_channels_norm != adjusted_channels_cont:
+            raise ValueError(f"融合策略 '{self.strategy}' 要求调整后的通道数一致, "
+                             f"但得到: norm={adjusted_channels_norm}, cont={adjusted_channels_cont}")
+        
+        final_channels = adjusted_channels_norm
+
+        # Initialize layers based on strategy
+        if self.strategy == 'cross-attention':
+            num_heads = config.get('attention_heads', 4)
+            self.attention = nn.MultiheadAttention(embed_dim=final_channels, num_heads=num_heads, batch_first=True)
+            self.output_dim = final_channels
+        
+        elif self.strategy == 'concat':
+            concatenated_channels = adjusted_channels_norm + adjusted_channels_cont
+            fusion_out_channels = config.get('out_channels', concatenated_channels)
+            self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=fusion_out_channels, kernel_size=1)
+            self.output_dim = fusion_out_channels
+        
+        elif self.strategy != 'add':
+            raise ValueError(f"未知的融合策略: '{self.strategy}'")
+        else: # 'add' strategy
+            self.output_dim = final_channels
+
 
     def forward(self, features_norm, features_cont):
-        features_norm = features_norm.transpose(1, 2)
-        features_cont_expanded = features_cont.unsqueeze(1).expand(-1, features_norm.size(1), -1)
-        if self.strategy == 'add': return features_norm + self.project_cont(features_cont_expanded)
-        elif self.strategy == 'attention':
-            projected_cont = self.project_cont(features_cont_expanded)
-            return self.attention(features_norm, projected_cont, projected_cont, need_weights=False)[0]
-        else: return torch.cat([features_norm, features_cont_expanded], dim=-1)
+        # 1. Adjust features from each branch
+        features_norm = self.adjuster_norm(features_norm)
+        features_cont = self.adjuster_cont(features_cont)
 
-@register_fusion('CrossAttentionFusion')
+        # For 'add', shapes must be identical after adjustment
+        if self.strategy == 'add' and features_norm.shape != features_cont.shape:
+            raise ValueError(
+                f"融合策略 'add' 要求调整后的两个分支输出形状完全一致。"
+                f"但收到的形状不匹配: \n"
+                f"  - 调整后归一化谱分支输出: {features_norm.shape}\
+"
+                f"  - 调整后连续谱分支输出: {features_cont.shape}")
+
+        # 2. Fuse based on strategy
+        if self.strategy == 'add':
+            return features_norm + features_cont
+        
+        elif self.strategy == 'concat':
+            return self.fusion_conv(torch.cat([features_norm, features_cont], dim=1))
+
+        elif self.strategy == 'cross-attention':
+            # Input shape for MultiheadAttention: (B, L, C)
+            query = features_norm.permute(0, 2, 1)
+            key = features_cont.permute(0, 2, 1)
+            value = features_cont.permute(0, 2, 1)
+            
+            attended_output, _ = self.attention(query, key, value)
+            
+            # Revert to (B, C, L)
+            return attended_output.permute(0, 2, 1)
+
+
+
+@register_fusion
 class CrossAttentionFusion(nn.Module):
     def __init__(self, config):
         super(CrossAttentionFusion, self).__init__()

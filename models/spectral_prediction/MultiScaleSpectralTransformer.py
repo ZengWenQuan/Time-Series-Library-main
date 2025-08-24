@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import yaml
-from exp.exp_basic import register_model
+# from exp.exp_basic import register_model
 
 # --- 1. Sub-path Modules for the MSST Branch ---
 class CNNPath(nn.Module):
@@ -105,8 +105,8 @@ class ContinuumCNNBranch(CNNPath):
     def __init__(self, config):
         super(ContinuumCNNBranch, self).__init__(config)
 
-# --- 3. Main Model: MultiScaleSpectralTransformer ---
-@register_model('MultiScaleSpectralTransformer')
+# # --- 3. Main Model: MultiScaleSpectralTransformer ---
+# @register_model('MultiScaleSpectralTransformer')
 class MultiScaleSpectralTransformer(nn.Module):
     def __init__(self, configs):
         super(MultiScaleSpectralTransformer, self).__init__()

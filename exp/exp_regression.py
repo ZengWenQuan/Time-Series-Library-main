@@ -18,6 +18,13 @@ class Exp_Regression(Exp_Basic):
         # 然后使用初始化好的 scalers 去加载数据
         self._get_data()
 
+        # 从数据加载器中取一个样本
+        sample_batch, _, _ = next(iter(self.train_loader))
+        sample_batch = sample_batch.float().to(self.device)
+
+        # 将样本传递给模型构建函数
+        self.model = self._build_model(sample_batch=sample_batch)
+
     def _get_data(self):
         self.train_data, self.train_loader = data_provider(self.args, 'train',feature_scaler= self.feature_scaler,label_scaler= self.label_scaler)
         self.vali_data, self.vali_loader = data_provider(self.args, 'val',feature_scaler= self.feature_scaler, label_scaler=self.label_scaler)

@@ -11,18 +11,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, format_feh_classification_metrics
-# --- Model Registration Mechanism ---
-MODEL_REGISTRY = {}
-
-def register_model(name):
-    """A decorator to register a new model class."""
-    def decorator(cls):
-        if cls.__name__ in MODEL_REGISTRY:
-            raise ValueError(f'主模型{cls.__name__} 已经存在了！不能重复注册')
-        MODEL_REGISTRY[cls.__name__] = cls
-        return cls
-    return decorator
-# --- End of Mechanism ---
+from models.registries import MODEL_REGISTRY
 
 class Exp_Basic(object):
     def __init__(self, args):
@@ -38,6 +27,10 @@ class Exp_Basic(object):
             with open(self.args.model_conf, 'r') as f:
                 model_config = yaml.safe_load(f)
             
+            # --- 新增：从 head_config 中加载 initialize_lazy 开关 ---
+            head_config = model_config.get('head_config', {})
+            self.args.initialize_lazy = head_config.get('initialize_lazy', False)
+
             training_settings = model_config.get('training_settings', {})
             
             # --- 强制从 YAML 文件中获取 'targets' ---
@@ -66,8 +59,6 @@ class Exp_Basic(object):
                 self.logger.info("Automatic Mixed Precision (AMP) enabled.")
             else:
                 self.logger.warning("AMP is only available on CUDA devices. Disabling AMP.")
-        
-        self.model = self._build_model().to(self.device)
 
         # --- ADDED: Resume from checkpoint logic ---
         if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
@@ -87,19 +78,24 @@ class Exp_Basic(object):
         self.args.train_transform = Transforms(augs_conf)
         # 此函数不再有返回值
 
-    def _build_model(self):
+    def _build_model(self, sample_batch=None):
         model_class = MODEL_REGISTRY.get(self.args.model)
         if model_class is None:
             raise ValueError(f"Model '{self.args.model}' is not registered. "
                              f"Available models: {list(MODEL_REGISTRY.keys())}")
         
         print(f"Building model: {self.args.model}")
+        # Add sample_batch to the config object
+        self.args.sample_batch = sample_batch
         model = model_class(self.args).float()
+
+        model.to(self.device)
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         
         # --- Model Summary Logic ---
+        # 模型在自己的__init__中完成初始化，所以这里可以直接计算参数
         info_model_path = os.path.join(self.args.run_dir, 'model.txt')
         with open(info_model_path, 'w') as f:
             f.write("模型结构:\n")

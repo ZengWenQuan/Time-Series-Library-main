@@ -19,13 +19,11 @@ LABELS_FILENAME="labels.csv"
 MODEL_CONF="./conf/dual_branch_moe.yaml"
 FEATURE_SIZE=4800
 LABEL_SIZE=4
-TARGETS="['Teff','logg','FeH','CFe']" #必须不能留空格
 split_ratio='[0.8,0.2,0]' #必须不能留空格
 TRAIN_EPOCHS=355
 BATCH_SIZE=32
 PATIENCE=10
 LEARNING_RATE=0.0001
-LR_ADJUST='cos'
 
 USE_GPU=True
 GPU_ID=0
@@ -45,13 +43,10 @@ python -u run.py \
   --feature_size ${FEATURE_SIZE} \
   --label_size ${LABEL_SIZE} \
   --stats_path conf/stats.yaml \
-  
   --train_epochs ${TRAIN_EPOCHS} \
   --batch_size ${BATCH_SIZE} \
   --patience ${PATIENCE} \
   --learning_rate ${LEARNING_RATE} \
-  --lradj ${LR_ADJUST} \
   --use_gpu ${USE_GPU} \
-  --use_amp \
   --gpu ${GPU_ID} \
   --des "${MODEL_NAME}_experiment"

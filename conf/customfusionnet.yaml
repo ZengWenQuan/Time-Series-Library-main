@@ -1,21 +1,22 @@
+# CustomFusionNet 配置文件 (v2, with adjustments in fusion module)
 
-# CustomFusionNet 配置文件 (v7, 使用分支和头注册机制)
-
-# --- 训练设置 ---
+# 1. 训练设置
 training_settings:
-  loss_function: 'mse'
-  loss_weights: [1.0, 1.0, 1.0, 1.0]
-  lradj: 'cos'
   targets: ['Teff', 'logg', 'FeH', 'CFe']
+  loss_function: 'mse'
+  loss_weights: [1.0, 1.0, 1.5, 1.2]
+  lradj: 'cos'
   mixed_precision: True
 
 # --- 分支与头模块选择 ---
 normalized_branch_name: 'NormalizedSpectrumBranch' 
 continuum_branch_name: 'ContinuumWaveletBranch'
-fusion_name: 'GeneralFusion'
-head_name: 'LSTM_FFN_Head'
+fusion_name: 'FusionModule'
+head_name: 'MultiTaskHead'
 
-# --- 分支参数配置 ---
+initialize_lazy: True
+
+# --- 分支参数配置 (Original) ---
 normalized_branch_config:
   pyramid_channels: [32, 32, 16]
   kernel_sizes: [3, 5, 7]
@@ -33,17 +34,27 @@ continuum_branch_config:
       - {out_channels_per_path: 16, pool_size: 2}
       - {out_channels_per_path: 16, pool_size: 2}
 
-# --- 融合模块参数配置 ---
+# --- 融合模块参数配置 (with adjustments) ---
 fusion_config:
   strategy: 'concat'
-  attention_heads: 4
-  # dim_norm and dim_cont will be added dynamically by the model
+  # Adjustment for normalized branch output before fusion
+  adjustment_config_norm:
+    out_channels: 64
+    out_len: 600
+  # Adjustment for continuum branch output before fusion
+  adjustment_config_cont:
+    out_channels: 64
+    out_len: 600
+  # Output channels after concat and 1x1 conv
+  out_channels: 128 # 64+64 -> 128
 
 # --- 头模块参数配置 ---
 head_config:
-  # lstm_input_dim will be added dynamically by the model
-  lstm_hidden_dim: 32
-  lstm_layers: 2
-  dropout: 0.3
-  prediction_head:
-    hidden_layers: [32, 16]
+  conv_pyramid:
+    # Input channels must match fusion_config.out_channels
+    in_channels: 128 
+    layers:
+      - {out_channels: 256, kernel_size: 3, pool_size: 2}
+      - {out_channels: 512, kernel_size: 3, pool_size: 2}
+  ffn_layers: [512, 256, 128] 
+  dropout: 0.2 

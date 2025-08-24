@@ -21,8 +21,6 @@ from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
 from exp.exp_regression import Exp_Regression
 from exp.exp_spectral_prediction import Exp_Spectral_Prediction
-from exp.exp_dualpyramidnet import Exp_DualPyramidNet
-from exp.exp_dualspectralnet import Exp_DualSpectralNet
 from utils.print_args import print_args
 
 warnings.filterwarnings('ignore')

@@ -60,9 +60,6 @@ python -u run.py \
   --patience 20 \
   --batch_size $BATCH_SIZE \
   --learning_rate $LEARNING_RATE \
-  --loss 'mse' \
-  --lradj type1 \
-  --gradient_clip_val 1.0 \
   --train_epochs $EPOCHS \
   --use_gpu True \
   --gpu 0 > $LOG_FILE 2>&1 &

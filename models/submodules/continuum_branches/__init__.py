@@ -1,16 +1,19 @@
-# A registry to store continuum branch classes
-CONTINUUM_BRANCH_REGISTRY = {}
 
-def register_continuum_branch(cls):
-    """A decorator to register a new continuum branch class using its own name."""
-    name = cls.__name__
-    if name in CONTINUUM_BRANCH_REGISTRY:
-        raise ValueError(f"Continuum branch '{name}' already registered.")
-    CONTINUUM_BRANCH_REGISTRY[name] = cls
-    return cls
+# --- 自动发现并导入此目录下的所有模块以触发注册 ---
+import os
+import importlib
 
-# --- 新增：导入此目录下的所有分支模块，以触发注册 ---
-from . import large_kernel_branch
-from . import moe_branch
-from . import wavelet_branch
-from . import cnn_transformer_branch
+# 获取当前文件的目录路径
+current_dir = os.path.dirname(__file__)
+
+# 遍历目录下的所有文件
+for filename in os.listdir(current_dir):
+    # 确保是Python文件，且不是__init__.py自身
+    if filename.endswith('.py') and not filename.startswith('__'):
+        # 从文件名中获取模块名
+        module_name = filename[:-3]
+        # 动态地、相对地导入模块，这会执行文件顶层的代码，触发注册
+        importlib.import_module(f".{module_name}", package=__name__)
+
+# 从中央注册表导出，方便其他模块调用
+from ...registries import CONTINUUM_BRANCH_REGISTRY, register_continuum_branch

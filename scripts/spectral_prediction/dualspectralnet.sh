@@ -40,7 +40,6 @@ LABEL_PATH="removed_with_rv.csv"
 MODEL_CONF="./conf/dualspectralnet.yaml"
 FEATURE_SIZE=4700
 LABEL_SIZE=4
-TARGETS="Teff,logg,FeH,CFe"
 
 # 训练参数
 BATCH_SIZE=32
@@ -59,7 +58,6 @@ echo "  模型名称: ${MODEL_NAME}"
 echo "  任务类型: ${TASK_NAME}"
 echo "  特征维度: ${FEATURE_SIZE}"
 echo "  标签维度: ${LABEL_SIZE}"
-echo "  目标参数: ${TARGETS}"
 echo "  批次大小: ${BATCH_SIZE}"
 echo "  学习率: ${LEARNING_RATE}"
 echo "  训练轮数: ${TRAIN_EPOCHS}"
