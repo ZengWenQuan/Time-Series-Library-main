@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import time
+import datetime
 from utils.tools import EarlyStopping
 from utils.augmentations import Transforms
 from utils.stellar_metrics import save_history_plot
@@ -12,6 +13,37 @@ import pandas as pd
 import yaml
 from utils.stellar_metrics import calculate_metrics, format_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, format_feh_classification_metrics
 from models.registries import MODEL_REGISTRY
+
+def format_duration(seconds):
+    """Formats a duration in seconds into a human-readable string (H:M:S)."""
+    if seconds < 0:
+        return "0s"
+    td = datetime.timedelta(seconds=seconds)
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours > 0:
+        return f'{hours}h {minutes}m {seconds}s'
+    elif minutes > 0:
+        return f'{minutes}m {seconds}s'
+    else:
+        return f'{seconds}s'
+
+# --- ADDED: Custom Formatter for Beijing Time ---
+class BeijingTimeFormatter(logging.Formatter):
+    def converter(self, timestamp):
+        import datetime
+        tz = datetime.timezone(datetime.timedelta(hours=8))
+        return datetime.datetime.fromtimestamp(timestamp, tz)
+
+    def formatTime(self, record, datefmt=None):
+        import datetime
+        dt = self.converter(record.created)
+        if datefmt:
+            s = dt.strftime(datefmt)
+        else:
+            s = dt.isoformat(timespec='milliseconds')
+        return s
 
 class Exp_Basic(object):
     def __init__(self, args):
@@ -222,7 +254,7 @@ class Exp_Basic(object):
             self.model.train()
             train_loss = []
             for i, (batch_x, batch_y, batch_obsid) in enumerate(self.train_loader):
-                model_optim.zero_grad()
+                model_optim.zero_grad() 
                 
                 # --- ADDED: AMP Logic ---
                 if self.scaler is not None:
@@ -274,15 +306,20 @@ class Exp_Basic(object):
             # --- Logging and History ---
             avg_grad_norm = np.mean(epoch_grad_norms)
             cost_time = time.time() - epoch_time
+            epoch_time=time.time()
             remaining_time = cost_time * (self.args.train_epochs - epoch - 1)
 
             current_lr = model_optim.param_groups[0]['lr']
             history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
             
+            # --- REFACTORED: Use format_duration for cleaner time logging ---
+            formatted_cost_time = format_duration(cost_time)
+            formatted_eta = format_duration(remaining_time)
+
             log_msg = f"Epoch: {epoch + 1} /{self.args.train_epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
-            log_msg += f" | Time: {int(cost_time/60)}m {int(cost_time%60)}s | ETA: {int(remaining_time/3600)}h {int(( remaining_time/60) %60)}m {int(remaining_time)%60}s"
+            log_msg += f" | Time: {formatted_cost_time} | ETA: {formatted_eta}"
             self.logger.info(log_msg)
             
             # --- Log to MLflow ---
@@ -409,12 +446,11 @@ class Exp_Basic(object):
         self.logger.setLevel(logging.INFO)   
         self.logger.propagate = False
         
-        # 获取当前北京时间
-        beijing_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
-        time_str = beijing_time.strftime('%Y-%m-%d %H:%M')
-        
-        # Formatter        
-        formatter = logging.Formatter(f'CEMP search - {time_str} - %(message)s')
+        # Formatter - 使用 %(asctime)s 来动态显示时间
+        formatter = BeijingTimeFormatter(
+            'CEMP search - %(asctime)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S' # 可选：定义时间格式
+        )
         
         # File Handler        
         log_file = os.path.join(self.args.run_dir, 'training.log')        
@@ -430,4 +466,4 @@ class Exp_Basic(object):
         # Add handlers to the logger        
         if not self.logger.handlers:            
             self.logger.addHandler(file_handler)            
-            self.logger.addHandler(stream_handler)    
+            self.logger.addHandler(stream_handler)

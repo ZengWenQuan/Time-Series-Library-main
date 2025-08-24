@@ -53,7 +53,7 @@ normalized_branch_config:
 
 # 4. 融合模块配置
 fusion_config:
-  strategy: 'concat'
+  strategy: 'add'
   channels: *branch_c
 
 # 5. 预测头配置 (MultiTaskHead)
@@ -63,6 +63,8 @@ head_config:
     in_channels: *branch_c 
     layers:
       - {out_channels: 128, kernel_size: 3, pool_size: 2}
-      - {out_channels: 256, kernel_size: 3, pool_size: 2}
+      - {out_channels: 64, kernel_size: 3, pool_size: 2}
+      - {out_channels: 32, kernel_size: 3, pool_size: 2}
+      - {out_channels: 16, kernel_size: 3, pool_size: 2}
   ffn_layers: [256, 128]
   dropout: 0.3

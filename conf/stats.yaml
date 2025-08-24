@@ -57,12 +57,12 @@ flux:
 augs_conf:
   - name: 'add_noise'
     enabled: true
-    p: 0.5
+    p: 0.2
     params: {sigma: 0.01}
   
   - name: 'random_shift'
     enabled: true
-    p: 0.5
+    p: 0.2
     params: {max_shift: 10}
 
   - name: 'random_scaling'
