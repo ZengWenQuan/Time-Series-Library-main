@@ -14,20 +14,15 @@
 ```
 ├── data_provider/
 │   └── data_loader_spectral.py    # 核心光谱数据加载器
-├── dataset/spectral/              # 光谱数据集存放目录
-│   ├── final_spectra_continuum.csv
-│   ├── final_spectra_normalized.csv
-│   └── removed_with_rv.csv
+├── dataset/split_data/              # 训练/验证/测试数据存放目录
 ├── exp/
 │   └── exp_spectral_prediction.py # 光谱预测任务的实验管理器
 ├── models/spectral_prediction/    # 光谱预测模型库
-│   ├── DualSpectralNet.py         # 双分支光谱网络 (CNN+Transformer)
-│   └── FreqInceptionNet.py        # 频率+Inception网络 (FFT+Inception)
-├── conf/                          # 模型配置文件
+├── conf/                          # 模型及统计数据配置文件
 │   ├── dualspectralnet.yaml
-│   └── freqinceptionnet.yaml
-└── scripts/spectral_prediction/   # 训练脚本
-    └── run_freqinceptionnet.sh
+│   └── stats.yaml
+├── scripts/spectral_prediction/   # 训练脚本
+└── update_stats.py                # 更新统计数据的脚本
 ```
 
 ## 🚀 快速开始
@@ -41,7 +36,40 @@ pip install torch pandas numpy pyyaml scikit-learn
 
 ### 2. 数据准备
 
-将您的光谱数据文件放置在 `dataset/spectral/` 目录下。
+将您的光谱数据文件放置在 `dataset/` 目录下，并划分为 `train`, `val`, `test` 子目录。
+
+## ‼️ 关键步骤：生成统计数据文件 (stats.yaml)
+
+**警告：这是成功训练模型的关键一步，直接关系到预测结果的准确性。**
+
+本框架使用 `conf/stats.yaml` 文件来对所有输入数据（光谱流量）和输出标签（恒星参数）进行归一化处理。模型的训练和评估效果严重依赖于这个文件中统计数据的准确性。
+
+### 核心原则：避免数据泄露
+
+为了保证模型的泛化能力和评估的公正性，归一化所用的统计数据（如均值、标准差）**必须只从训练集中计算**。如果在计算统计数据时混入了验证集或测试集的数据，会导致“数据泄露”，这将使模型在验证/测试时表现出虚高的性能，并可能导致预测结果出现系统性偏差（我们之前遇到的核心问题）。
+
+### 如何正确生成 `stats.yaml`
+
+我们提供了一个专门的脚本 `update_stats.py` 来解决这个问题。该脚本会读取指定的训练集数据，计算必要的统计信息，并安全地更新 `conf/stats.yaml` 文件。
+
+**使用方法:**
+
+在开始任何训练之前，请先运行以下命令：
+
+```bash
+python update_stats.py
+```
+
+**脚本说明:**
+- 该命令会使用默认路径 `dataset/split_data/train` 作为训练集来源。
+- 它会更新 `conf/stats.yaml` 文件中 `Teff`, `logg`, `FeH`, `CFe` 和 `flux` 的统计数据。
+- 文件中任何其他配置（如 `augs_conf`）都会被完整保留。
+- 如果您的训练集在其他路径，可以使用 `--train_dir` 参数指定，例如:
+  ```bash
+  python update_stats.py --train_dir /path/to/your/train_data
+  ```
+
+正确生成 `stats.yaml` 后，您才可以开始下一步的模型训练。
 
 ### 3. 模型训练
 
@@ -73,7 +101,7 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 - **特点**: 一个创新的双分支网络，从频域和时域（空域）两个角度分析光谱。
   - **频率分支**: 将连续谱通过FFT变换到频域，再用CNN进行下采样和特征提取，专注于分析周期性和全局性特征。
   - **Inception分支**: 采用Google的Inception网络结构，通过不同大小的卷积核并行提取归一化谱的多尺度特征，并结合通道注意力（SE Block）进行特征增强。
-  - **序列处理**: 在特征融合后，使用双向LSTM（BiLSTM）进一步处理序列信息。
+  - **后端**: 在特征融合后，使用双向LSTM（BiLSTM）进一步处理序列信息。
 - **配置文件**: `conf/freqinceptionnet.yaml`
 - **适用场景**: 希望结合频域分析和多尺度特征提取的实验性研究。
 
@@ -97,13 +125,13 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 
 ---
 
-*最后更新: 2025-08-05*
+*最后更新: 2025-08-24*
 
 ---
 
 ## 模型库与使用示例 (v2)
 
-*最后更新: 2025-08-12*
+*最后更新: 2025-08-24*
 
 本项目后续开发的核心模型均支持多任务，可通过 `task_name` 参数在 `spectral_prediction` 和 `regression` 任务间切换。
 
@@ -129,9 +157,10 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 ### 2. LargeKernelConvNet
 
 - **设计思想**: 探索非常规卷积在光谱分析中的应用。
-  - **连续谱分支**: 使用**超大核卷积 (Large Kernel Convolution)** 来一次性捕捉光谱的全局长程依赖。
-  - **归一化谱分支**: 先通过**转置卷积 (Transposed Convolution)** 对输入进行上采样，再送入金字塔式多尺度网络进行精细特征提取。
-  - **后端**: 同样使用双向LSTM和多头FFN。
+  - **连续谱分支**: 使用**超大核卷积 (Large Kernel Convolution)** 来一次性捕捉光谱的全局长程依赖，输出为向量特征。
+  - **归一化谱分支**: 先通过**转置卷积 (Transposed Convolution)** 对输入进行上采样，再送入金字塔式多尺度网络进行精细特征提取，输出为序列特征。
+  - **融合模块**: 使用 `ConcatFusion` 模块，将向量特征广播并与序列特征进行拼接。
+  - **后端**: 使用双向LSTM和多头FFN。
 - **配置文件**: `conf/largekernel.yaml`
 
 #### 使用方法:

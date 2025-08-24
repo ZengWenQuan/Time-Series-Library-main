@@ -184,7 +184,23 @@ class Exp_Basic(object):
         raise NotImplementedError("Subclasses must implement _get_data()")
 
     def _select_optimizer(self):
-        return torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        # --- Optimizer Selection ---
+        # Instructions: Uncomment the optimizer you want to use.
+        import torch.optim as optim
+        # Option 1: Adam (Default)
+        # optimizer = optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        
+        # Option 2: AdamW
+        optimizer = optim.AdamW(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        
+        # Option 3: SGD with Momentum
+        # momentum = getattr(self.args, 'momentum', 0.9) # You can set momentum in your YAML if needed
+        # optimizer = optim.SGD(self.model.parameters(), lr=self.args.learning_rate, momentum=momentum, weight_decay=self.args.weight_decay)
+        
+        # Option 4: RMSprop
+        # optimizer = optim.RMSprop(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        
+        return optimizer
 
     def _select_scheduler(self, optimizer):
         if self.args.lradj == 'cos':
@@ -234,9 +250,9 @@ class Exp_Basic(object):
         return np.average(total_loss), all_preds, all_trues
         raise NotImplementedError("Subclasses must implement vali()")
     def train(self):
-        mlflow.set_experiment(self.args.task_name)
-        mlflow.start_run(run_name=f"{self.args.model}_{self.args.model_id}")
-        mlflow.log_params(vars(self.args))
+        # mlflow.set_experiment(self.args.task_name)
+        # mlflow.start_run(run_name=f"{self.args.model}_{self.args.model_id}")
+        # mlflow.log_params(vars(self.args))
 
         chechpoint_path=os.path.join(self.args.run_dir, 'checkpoints')
         os.makedirs(chechpoint_path, exist_ok=True)
@@ -245,9 +261,10 @@ class Exp_Basic(object):
         model_optim = self._select_optimizer()
         scheduler = self._select_scheduler(model_optim)
         criterion = self._select_criterion()
-        mlflow.log_param("loss_function", criterion.__class__.__name__)
+        # mlflow.log_param("loss_function", criterion.__class__.__name__)
 
         history_train_loss, history_vali_loss, history_lr = [], [], []
+        best_feh_mae = float('inf') # ADDED: Initialize tracker
         epoch_time=time.time()
         for epoch in range(self.args.train_epochs):
             epoch_grad_norms = [] #<-- ADDED
@@ -263,7 +280,6 @@ class Exp_Basic(object):
                         loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
                     
                     self.scaler.scale(loss).backward()
-                    # 先反缩放，再做梯度裁剪和记录，避免因为缩放因子导致的梯度数值虚高
                     self.scaler.unscale_(model_optim)
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
                     self.scaler.step(model_optim)
@@ -279,7 +295,7 @@ class Exp_Basic(object):
                 epoch_grad_norms.append(grad_norm.item())
                 train_loss.append(loss.item())
 
-            # --- Evaluation (Structure preserved as requested) ---
+            # --- Evaluation ---
             train_loss_avg = np.average(train_loss)
             vali_loss, vali_preds, vali_trues = self.vali(self.vali_data, self.vali_loader, criterion)
 
@@ -290,14 +306,12 @@ class Exp_Basic(object):
 
             train_eval_loss, train_preds, train_trues = self.vali(self.train_data, self.train_loader, criterion)
 
-            # --- Metric Processing (Refactored into new function) ---
-            # Process and save "latest" metrics
+            # --- Metric Processing ---
             train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
             vali_reg_metrics = self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "latest")
             if self.test_loader:
                 test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
             
-            # Manually combine val+test for combined metrics
             if test_preds is not None:
                 combined_preds = np.concatenate([vali_preds, test_preds])
                 combined_trues = np.concatenate([vali_trues, test_trues])
@@ -306,13 +320,12 @@ class Exp_Basic(object):
             # --- Logging and History ---
             avg_grad_norm = np.mean(epoch_grad_norms)
             cost_time = time.time() - epoch_time
-            epoch_time=time.time()
+            epoch_time = time.time()
             remaining_time = cost_time * (self.args.train_epochs - epoch - 1)
 
             current_lr = model_optim.param_groups[0]['lr']
             history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
             
-            # --- REFACTORED: Use format_duration for cleaner time logging ---
             formatted_cost_time = format_duration(cost_time)
             formatted_eta = format_duration(remaining_time)
 
@@ -323,40 +336,29 @@ class Exp_Basic(object):
             self.logger.info(log_msg)
             
             # --- Log to MLflow ---
-            # 1. 记录主要的损失值和学习率
-            mlflow.log_metric('train_loss_epoch', train_loss_avg, step=epoch)
-            mlflow.log_metric('val_loss', vali_loss, step=epoch)
-            mlflow.log_metric('learn_rate', current_lr, step=epoch)
-            if test_loss is not None: mlflow.log_metric('test_loss', test_loss, step=epoch)
-            if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None:
-                 if 'loss' in combined_reg_metrics:
-                    mlflow.log_metric('combined_loss', combined_reg_metrics['loss'], step=epoch)
-            # --- ADDED: Conditionally print detailed metrics based on interval ---
             if (epoch + 1) % self.args.vali_interval == 0:
                 self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
-                if train_reg_metrics:
-                    print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
-                if vali_reg_metrics:
-                    print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
-                if locals().get('test_reg_metrics',None):
-                    print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")
-                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None:
-                    print(f"Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
+                if train_reg_metrics: print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
+                if vali_reg_metrics: print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
+                if locals().get('test_reg_metrics',None): print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")
+                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None: print(f"Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
 
-            # 2. 调用新方法记录每个标签的MAE
-            self.trace_metrics(
-                epoch=epoch,
-                train_metrics=train_reg_metrics,
-                vali_metrics=vali_reg_metrics,
-                test_metrics=locals().get('test_reg_metrics',None),
-                combined_metrics=locals().get('combined_reg_metrics',None)
-            )
-
-            # --- Early Stopping & Best Model Logic ---
+            # --- Early Stopping & Best Model Checkpoint Saving ---
             prev_best_loss = early_stopping.val_loss_min
             early_stopping(vali_loss, self.model, chechpoint_path)
             if vali_loss < prev_best_loss:
-                self.logger.info(f"New best model found. Saving best metrics...")
+                self.logger.info(f"New best validation loss: {vali_loss:.4f}. Model checkpoint saved.")
+
+            # --- User's Logic: Save metric files if combined FeH_mae is the best so far ---
+            if 'combined_reg_metrics' in locals() and combined_reg_metrics and 'FeH_mae' in combined_reg_metrics:
+                current_feh_mae = combined_reg_metrics['FeH_mae']
+            else:
+                current_feh_mae= vali_reg_metrics['FeH_mae']
+            if current_feh_mae < best_feh_mae:
+                best_feh_mae = current_feh_mae
+                torch.save(self.model.state_dict(), chechpoint_path + '/' + 'best.pth')
+
+                self.logger.info(f"New best  FeH MAE: {best_feh_mae:.4f}. Saving metrics for this epoch as 'best'...")
                 self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")
                 self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "best")
                 if test_preds is not None:
@@ -364,11 +366,11 @@ class Exp_Basic(object):
                     self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "best")
 
             if early_stopping.early_stop: break
-            if scheduler is not None: scheduler.step()
+            if scheduler is not None: scheduler.step() 
 
             save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir)
-        mlflow.log_artifact(self.args.run_dir, artifact_path="results")
-        mlflow.end_run()
+        # mlflow.log_artifact(self.args.run_dir, artifact_path="results")
+        # mlflow.end_run()
         return self.model
 
 
@@ -415,12 +417,12 @@ class Exp_Basic(object):
         save_feh_classification_metrics(cls_metrics, save_dir, phase="final_test")
         
         # 如果MLflow仍在运行，记录最终测试指标
-        if mlflow.active_run():
-            mlflow.log_metric("final_test_loss", test_loss)
-            for metric_name, metric_value in reg_metrics.items():
-                if isinstance(metric_value, (int, float)):
-                    mlflow.log_metric(f'final_test_{metric_name}', metric_value)
-            mlflow.log_artifacts(save_dir, artifact_path="test_results")
+        # if mlflow.active_run():
+        #     mlflow.log_metric("final_test_loss", test_loss)
+        #     for metric_name, metric_value in reg_metrics.items():
+        #         if isinstance(metric_value, (int, float)):
+        #             mlflow.log_metric(f'final_test_{metric_name}', metric_value)
+        #     mlflow.log_artifacts(save_dir, artifact_path="test_results")
 
     def _select_criterion(self):
         loss=self.args.loss.lower()

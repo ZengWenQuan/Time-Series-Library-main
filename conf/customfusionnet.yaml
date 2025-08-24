@@ -56,7 +56,5 @@ head_config:
     layers:
       - {out_channels: 128, kernel_size: 3, pool_size: 2}
       - {out_channels: 64, kernel_size: 3, pool_size: 2}
-      - {out_channels: 32, kernel_size: 3, pool_size: 2}
-      - {out_channels: 16, kernel_size: 3, pool_size: 2}
   ffn_layers: [256, 128]
   dropout: 0.3
