@@ -231,8 +231,8 @@ class Exp_Basic(object):
                     mlflow_key = f"{phase}_{key}"
                     mlflow.log_metric(mlflow_key, value, step=epoch)
     def vali(self, vali_data, vali_loader, criterion):
-        if not vali_data: return None, None, None
-        total_loss, all_preds, all_trues = [], [], []
+        if not vali_data: return None, None, None ,None
+        total_loss, all_preds, all_trues,all_obsids = [], [], [],[]
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y,batch_obsid) in enumerate(vali_loader):
@@ -242,12 +242,14 @@ class Exp_Basic(object):
                 total_loss.append(loss.item())
                 all_preds.append(pred.cpu().numpy())
                 all_trues.append(true.cpu().numpy())
+                all_obsids.append(batch_obsid.cpu().numpy())
         all_preds = np.concatenate(all_preds, axis=0)
         all_trues = np.concatenate(all_trues, axis=0)
+        all_obsids=np.concatenate(all_obsids,axis=0)
         if self.label_scaler: 
             all_preds = self.label_scaler.inverse_transform(all_preds)
             all_trues = self.label_scaler.inverse_transform(all_trues)
-        return np.average(total_loss), all_preds, all_trues
+        return np.average(total_loss), all_preds, all_trues,all_obsids
         raise NotImplementedError("Subclasses must implement vali()")
     def train(self):
         # mlflow.set_experiment(self.args.task_name)
@@ -297,14 +299,14 @@ class Exp_Basic(object):
 
             # --- Evaluation ---
             train_loss_avg = np.average(train_loss)
-            vali_loss, vali_preds, vali_trues = self.vali(self.vali_data, self.vali_loader, criterion)
+            vali_loss, vali_preds, vali_trues,_ = self.vali(self.vali_data, self.vali_loader, criterion)
 
             if self.test_loader:
-                test_loss, test_preds, test_trues = self.vali(self.test_data, self.test_loader, criterion)
+                test_loss, test_preds, test_trues ,_ = self.vali(self.test_data, self.test_loader, criterion)
             else:
                 test_loss, test_preds, test_trues = None, None, None
 
-            train_eval_loss, train_preds, train_trues = self.vali(self.train_data, self.train_loader, criterion)
+            train_eval_loss, train_preds, train_trues ,_ = self.vali(self.train_data, self.train_loader, criterion)
 
             # --- Metric Processing ---
             train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
@@ -390,9 +392,9 @@ class Exp_Basic(object):
         # 3. 在测试集上评估
         self.logger.info("--- Starting Final Test ---")
         if self.test_data:
-            test_loss, test_preds, test_trues = self.vali(self.test_data,self.test_loader, self._select_criterion())
+            test_loss, test_preds, test_trues ,_= self.vali(self.test_data,self.test_loader, self._select_criterion())
         else:
-            test_loss, test_preds, test_trues = self.vali(self.vali_data,self.vali_loader, self._select_criterion())
+            test_loss, test_preds, test_trues ,_= self.vali(self.vali_data,self.vali_loader, self._select_criterion())
 
         if test_preds is None:
             self.logger.warning("Test evaluation returned no results. Skipping metric calculation and saving.")
@@ -423,6 +425,89 @@ class Exp_Basic(object):
         #         if isinstance(metric_value, (int, float)):
         #             mlflow.log_metric(f'final_test_{metric_name}', metric_value)
         #     mlflow.log_artifacts(save_dir, artifact_path="test_results")
+
+    def test_all(self):
+        # 1. 加载最优模型
+        checkpoint_path = self.args.checkpoints
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
+            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        else:
+            self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting test_all.")
+            return
+
+        # 2. 创建保存目录
+        save_dir = os.path.join(self.args.run_dir, 'test_all_results')
+        os.makedirs(save_dir, exist_ok=True)
+
+        # 3. 手动合并已加载的数据集
+        self.logger.info("--- Starting Test on ALL data (train+val+test) ---")
+        
+        datasets = [d for d in [self.train_data, self.vali_data, self.test_data] if d is not None]
+        if not datasets:
+            self.logger.error("No data found to combine. Aborting test_all.")
+            return
+
+        # 从已加载的Dataset对象中提取Numpy数组并合并
+        all_continuum = np.concatenate([d.data_continuum for d in datasets], axis=0)
+        all_normalized = np.concatenate([d.data_normalized for d in datasets], axis=0)
+        all_labels = np.concatenate([d.data_label for d in datasets], axis=0)
+        all_obsids = np.concatenate([d.obsids for d in datasets], axis=0)
+
+        # 临时定义一个用于全量数据评估的Dataset类
+        class _CombinedDataset(torch.utils.data.Dataset):
+            def __init__(self, continuum, normalized, labels, obsids):
+                self.continuum = continuum
+                self.normalized = normalized
+                self.labels = labels
+                self.obsids = obsids
+            
+            def __len__(self):
+                return len(self.labels)
+                
+            def __getitem__(self, index):
+                x_combined = np.stack([self.continuum[index], self.normalized[index]], axis=-1)
+                return (
+                    torch.from_numpy(x_combined).float(),
+                    torch.from_numpy(self.labels[index]).float(),
+                    self.obsids[index]
+                )
+
+        combined_dataset = _CombinedDataset(all_continuum, all_normalized, all_labels, all_obsids)
+        
+        all_loader = torch.utils.data.DataLoader(
+            combined_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            num_workers=self.args.num_workers,
+            drop_last=False
+        )
+        self.logger.info(f"Combined dataset created with {len(combined_dataset)} samples.")
+
+        # 4. 在合并后的数据集上评估
+        test_loss, test_preds, test_trues, test_obsids = self.vali(combined_dataset, all_loader, self._select_criterion())
+
+        if test_preds is None:
+            self.logger.warning("Full dataset evaluation returned no results. Skipping metric calculation and saving.")
+            return
+
+        # 5. 保存预测值和真实值到CSV
+        self.logger.info(f"Saving predictions to {save_dir}")
+        pred_df_data = {'obsid': test_obsids}
+        for i, target_name in enumerate(self.targets):
+            pred_df_data[f'{target_name}_true'] = test_trues[:, i]
+            pred_df_data[f'{target_name}_pred'] = test_preds[:, i]
+        
+        pred_df = pd.DataFrame(pred_df_data)
+        pred_df.to_csv(os.path.join(save_dir, 'predictions.csv'), index=False)
+
+        # 6. 计算并保存所有指标
+        self.logger.info("Calculating and saving final metrics for full dataset...")
+        reg_metrics = calculate_metrics(test_preds, test_trues, self.targets)
+        cls_metrics = calculate_feh_classification_metrics(test_preds, test_trues, self.args.feh_index)
+        
+        save_regression_metrics(reg_metrics, save_dir, self.args.targets, phase="final_test_all")
+        save_feh_classification_metrics(cls_metrics, save_dir, phase="final_test_all")
 
     def _select_criterion(self):
         loss=self.args.loss.lower()

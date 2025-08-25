@@ -61,6 +61,7 @@ class EarlyStopping:
         else:
             self.counter+=1
         self.early_stop=self.counter >= self.patience
+        print(f'counter/patience : {self.counter}/{self.patience}')
 
 
 class dotdict(dict):

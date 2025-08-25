@@ -1,11 +1,10 @@
+
 import os
 import warnings
 import numpy as np
 import torch
 import argparse
 import datetime
-import sys
-import shutil
 import ast
 import random
 
@@ -29,7 +28,7 @@ def fix_seed(seed):
     print(f"Random seed set to: {seed}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Spectral Analysis and Regression Library')
+    parser = argparse.ArgumentParser(description='Spectral Analysis and Regression Library - Test All Script')
 
     # --- Basic Config ---
     parser.add_argument('--task_name', type=str, required=True, choices=['regression', 'spectral_prediction'],
@@ -84,13 +83,6 @@ if __name__ == '__main__':
     
     fix_seed(args.seed)
     
-    if hasattr(args, 'split_ratio') and isinstance(args.split_ratio, str):
-        try:
-            args.split_ratio = ast.literal_eval(args.split_ratio)
-        except (ValueError, SyntaxError):
-            print(f"Warning: Invalid format for split_ratio. Using default [0.8, 0.1, 0.1]")
-            args.split_ratio = [0.8, 0.1, 0.1]
-    
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))
         print('Using GPU: cuda:{}'.format(args.gpu))
@@ -113,29 +105,16 @@ if __name__ == '__main__':
     elif args.task_name == 'spectral_prediction':
         Exp = Exp_Spectral_Prediction
     else:
-        # This case should not be reached due to 'choices' in parser
         raise ValueError(f"Unknown task name: {args.task_name}")
 
-    if args.is_training:
-        for ii in range(args.itr):
-            # --- Set up folder for this run ---
-            setting = f'{args.model_id}_{args.task_name}_{args.model}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{ii}'
-            run_dir = os.path.join('runs', args.task_name, args.model, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-            os.makedirs(run_dir, exist_ok=True)
-            args.run_dir = run_dir
+    # --- Set up folder for this run ---
+    # Note: run_dir is still needed for logger and result saving
+    setting = f'{args.model_id}_{args.task_name}_{args.model}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    run_dir = os.path.join('runs', args.task_name, args.model,f'test_all_{ datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}',)
+    os.makedirs(run_dir, exist_ok=True)
+    args.run_dir = run_dir
 
-            # Save model config used for this run
-            if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
-                shutil.copy2(args.model_conf, run_dir)
-
-            print(f'>>>>>>>start training : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
-            exp = Exp(args)
-            exp.train()
-
-            print(f'>>>>>>>testing : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-            exp.test()
-            torch.cuda.empty_cache()
-    else:
-        exp = Exp(args)
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
-        exp.test()
+    # --- Run Test All ---
+    exp = Exp(args)
+    print(f'>>>>>>> Running test_all for model: {args.model_id} <<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+    exp.test_all()

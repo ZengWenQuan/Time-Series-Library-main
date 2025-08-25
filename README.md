@@ -1,28 +1,25 @@
-# 恒星光谱参数预测任务 (Stellar Spectral Parameter Prediction Task)
+# 恒星光谱参数预测框架
 
-本项目是一个专注于恒星光谱参数预测的深度学习框架。其核心任务是通过分析恒星光谱数据，精准地估计恒星的关键物理参数，包括有效温度(Teff)、表面重力(log g)、金属丰度([Fe/H])和碳丰度([C/Fe])。
+## 核心设计思想：模块化与可扩展性
 
-## 📊 任务概述
+本项目是一个专注于恒星光谱参数预测的深度学习框架，其核心设计思想是将一个完整的光谱分析模型解耦为三个可独立替换的关键部分：
 
-- **任务名称**: `spectral_prediction`
-- **任务类型**: 多元回归 (Multi-variate Regression)
-- **输入**: 恒星光谱数据 (通常分为连续谱和归一化谱两个分支)
-- **输出**: 4个核心恒星参数: `[Teff, logg, FeH, CFe]`
+1.  **分支 (Branch)**: 负责处理特定类型的输入（如连续谱或归一化谱）。项目中内置了多种分支实现，例如基于CNN、小波变换、混合专家（MoE）或大卷积核等。
+2.  **融合模块 (Fusion)**: 负责将来自不同分支的特征进行智能融合。支持包括简单拼接（Concatenation）、逐元素相加（Addition）、交叉注意力（Cross-Attention）等多种策略。
+3.  **预测头 (Head)**: 接收融合后的特征，并执行最终的回归或分类任务。
+
+这种“即插即用”的设计允许研究人员通过简单的修改YAML配置文件，就能轻松地组合、测试和创造出新的模型架构，而无需深入修改底层代码。所有的模块都通过注册器模式（Registry Pattern）进行管理，保证了框架的灵活性和易于扩展性。
 
 ## 🗂️ 项目结构
 
 ```
-├── data_provider/
-│   └── data_loader_spectral.py    # 核心光谱数据加载器
-├── dataset/split_data/              # 训练/验证/测试数据存放目录
-├── exp/
-│   └── exp_spectral_prediction.py # 光谱预测任务的实验管理器
-├── models/spectral_prediction/    # 光谱预测模型库
-├── conf/                          # 模型及统计数据配置文件
-│   ├── dualspectralnet.yaml
-│   └── stats.yaml
-├── scripts/spectral_prediction/   # 训练脚本
-└── update_stats.py                # 更新统计数据的脚本
+├── data_provider/    # 数据加载器
+├── dataset/split_data/ # 训练/验证/测试数据存放目录
+├── exp/              # 实验管理器
+├── models/           # 模型库 (包含分支、融合、头等子模块)
+├── conf/             # 模型及统计数据配置文件
+├── scripts/          # 训练脚本
+└── update_stats.py   # 更新统计数据的脚本
 ```
 
 ## 🚀 快速开始
@@ -42,15 +39,9 @@ pip install torch pandas numpy pyyaml scikit-learn
 
 **警告：这是成功训练模型的关键一步，直接关系到预测结果的准确性。**
 
-本框架使用 `conf/stats.yaml` 文件来对所有输入数据（光谱流量）和输出标签（恒星参数）进行归一化处理。模型的训练和评估效果严重依赖于这个文件中统计数据的准确性。
+本框架使用 `conf/stats.yaml` 文件来对所有输入数据和输出标签进行归一化。归一化所用的统计数据（如均值、标准差）**必须只从训练集中计算**，以避免数据泄露。
 
-### 核心原则：避免数据泄露
-
-为了保证模型的泛化能力和评估的公正性，归一化所用的统计数据（如均值、标准差）**必须只从训练集中计算**。如果在计算统计数据时混入了验证集或测试集的数据，会导致“数据泄露”，这将使模型在验证/测试时表现出虚高的性能，并可能导致预测结果出现系统性偏差（我们之前遇到的核心问题）。
-
-### 如何正确生成 `stats.yaml`
-
-我们提供了一个专门的脚本 `update_stats.py` 来解决这个问题。该脚本会读取指定的训练集数据，计算必要的统计信息，并安全地更新 `conf/stats.yaml` 文件。
+我们提供了一个专门的脚本 `update_stats.py` 来正确地生成此文件。
 
 **使用方法:**
 
@@ -60,64 +51,51 @@ pip install torch pandas numpy pyyaml scikit-learn
 python update_stats.py
 ```
 
-**脚本说明:**
-- 该命令会使用默认路径 `dataset/split_data/train` 作为训练集来源。
-- 它会更新 `conf/stats.yaml` 文件中 `Teff`, `logg`, `FeH`, `CFe` 和 `flux` 的统计数据。
-- 文件中任何其他配置（如 `augs_conf`）都会被完整保留。
-- 如果您的训练集在其他路径，可以使用 `--train_dir` 参数指定，例如:
-  ```bash
-  python update_stats.py --train_dir /path/to/your/train_data
-  ```
-
-正确生成 `stats.yaml` 后，您才可以开始下一步的模型训练。
+该命令会使用默认路径 `dataset/split_data/train` 的数据来更新 `conf/stats.yaml` 文件。正确生成 `stats.yaml` 后，您才可以开始下一步的模型训练。
 
 ### 3. 模型训练
 
-通过执行对应模型的shell脚本来启动训练。例如，训练 `FreqInceptionNet`：
+通过执行对应模型的shell脚本来启动训练。例如:
 
 ```bash
-# 首先赋予脚本执行权限
-chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
-
-# 在后台启动训练
-./scripts/spectral_prediction/run_freqinceptionnet.sh
+chmod +x scripts/spectral_prediction/run_flexiblefusionnet.sh
+./scripts/spectral_prediction/run_flexiblefusionnet.sh
 ```
 
-训练日志将保存在 `logs/` 目录下，模型检查点将保存在 `checkpoints/` 目录下。
+## 🧠 核心模型库
 
-## 🧠 支持的光谱预测模型
+以下是项目中预置的几个核心模型，它们展示了框架的不同组合方式。
 
-### 1. DualSpectralNet
+### 1. FlexibleFusionNet
 
-- **特点**: 一个强大的双分支网络，结合了CNN和Transformer的优势。
-  - **连续谱分支**: 使用CNN提取局部特征，再通过Transformer捕捉长距离依赖关系。
-  - **吸收线分支**: 使用多尺度CNN（Multi-Scale CNN）来精细化提取吸收线的结构特征。
-  - **融合机制**: 采用交叉注意力（Cross-Attention）来智能地融合两个分支的信息。
-- **配置文件**: `conf/dualspectralnet.yaml`
-- **适用场景**: 需要同时捕捉光谱的全局趋势和局部精细特征的复杂任务。
+- **设计思想**: 一个灵活的“混合专家”模型，旨在让光谱的不同特征被最擅长处理它的“专家”网络所分析。
+- **连续谱分支**: `CustomMoEBranch` - 使用混合专家网络处理FFT变换后的频域特征。
+- **归一化谱分支**: `MultiScalePyramidBranch` - 一个标准的多尺度金字塔CNN，用于提取谱线特征。
+- **融合策略**: `add` - 将两个分支的特征逐元素相加。
+- **配置文件**: `conf/flexiblefusionnet.yaml`
+- **训练脚本**: `scripts/spectral_prediction/run_flexiblefusionnet.sh`
 
-### 2. FreqInceptionNet
+### 2. CustomFusionNet
 
-- **特点**: 一个创新的双分支网络，从频域和时域（空域）两个角度分析光谱。
-  - **频率分支**: 将连续谱通过FFT变换到频域，再用CNN进行下采样和特征提取，专注于分析周期性和全局性特征。
-  - **Inception分支**: 采用Google的Inception网络结构，通过不同大小的卷积核并行提取归一化谱的多尺度特征，并结合通道注意力（SE Block）进行特征增强。
-  - **后端**: 在特征融合后，使用双向LSTM（BiLSTM）进一步处理序列信息。
-- **配置文件**: `conf/freqinceptionnet.yaml`
-- **适用场景**: 希望结合频域分析和多尺度特征提取的实验性研究。
+- **设计思想**: 一个高度可定制的双分支融合网络，是快速实验新想法的理想基础。
+- **连续谱分支**: `ContinuumWaveletBranch` - 采用小波变换提取时频特征。
+- **归一化谱分支**: `NormalizedSpectrumBranch` - 采用金字塔式多尺度网络捕捉精细特征。
+- **融合策略**: `concat` - 将两个分支的特征拼接在一起。
+- **配置文件**: `conf/customfusionnet.yaml`
+- **训练脚本**: `scripts/spectral_prediction/run_customfusionnet.sh`
+
+### 3. LargeKernelConvNet
+
+- **设计思想**: 探索使用超大卷积核来捕捉光谱长程依赖的可能性。
+- **连续谱分支**: `LargeKernelBranch` - 使用单个超大核卷积层直接处理整个光谱，输出为向量。
+- **归一化谱分支**: `UpsampleMultiScaleBranch` - 先通过转置卷积提升分辨率，再用多尺度网络提取特征。
+- **融合策略**: `ConcatFusion` - 将向量分支的输出广播后与序列分支的特征进行拼接。
+- **配置文件**: `conf/largekernel.yaml`
+- **训练脚本**: `scripts/spectral_prediction/run_largekernel.sh`
 
 ## 🔧 自定义与扩展
 
-### 1. 添加新模型
-
-在 `models/spectral_prediction/` 目录下创建您的模型文件，并参考现有模型使用 `@register_model('YourModelName')` 进行注册。
-
-### 2. 修改模型配置
-
-直接编辑 `conf/` 目录下的YAML文件，即可调整模型的架构参数（如通道数、卷积核大小、是否使用BatchNorm等）和超参数，无需修改代码。
-
-### 3. 调整训练脚本
-
-`scripts/spectral_prediction/` 中的 `.sh` 脚本是训练的入口。您可以复制并修改它们，以定义不同的实验（如调整学习率、批次大小等）。
+通过修改 `conf/` 目录下的YAML文件，或在 `models/submodules/` 目录下添加新的模块，您可以轻松地组合和测试新模型。
 
 ## 📄 许可证
 
@@ -126,113 +104,3 @@ chmod +x scripts/spectral_prediction/run_freqinceptionnet.sh
 ---
 
 *最后更新: 2025-08-24*
-
----
-
-## 模型库与使用示例 (v2)
-
-*最后更新: 2025-08-24*
-
-本项目后续开发的核心模型均支持多任务，可通过 `task_name` 参数在 `spectral_prediction` 和 `regression` 任务间切换。
-
-### 1. CustomFusionNet
-
-- **设计思想**: 一个高度灵活的双分支融合网络，其分支可以从模块库中动态选择和加载。
-  - **连续谱分支**: 采用**小波变换(Wavelet Transform)**提取时频特征，后接一个简单的多尺度CNN。
-  - **归一化谱分支**: 采用了参考 `MSPNet` 设计的**金字塔式多尺度网络**，通过并行不同大小的卷积核来捕捉精细特征。
-  - **后端**: 使用双向LSTM和多头FFN进行最终预测。
-- **配置文件**: `conf/customfusionnet.yaml`
-
-#### 使用方法:
-
-- **执行光谱预测任务**:
-  ```bash
-  bash scripts/spectral_prediction/run_customfusionnet_spectral.sh
-  ```
-- **执行回归任务** (此模式下只使用归一化谱分支):
-  ```bash
-  bash scripts/regression/run_customfusionnet_regression.sh
-  ```
-
-### 2. LargeKernelConvNet
-
-- **设计思想**: 探索非常规卷积在光谱分析中的应用。
-  - **连续谱分支**: 使用**超大核卷积 (Large Kernel Convolution)** 来一次性捕捉光谱的全局长程依赖，输出为向量特征。
-  - **归一化谱分支**: 先通过**转置卷积 (Transposed Convolution)** 对输入进行上采样，再送入金字塔式多尺度网络进行精细特征提取，输出为序列特征。
-  - **融合模块**: 使用 `ConcatFusion` 模块，将向量特征广播并与序列特征进行拼接。
-  - **后端**: 使用双向LSTM和多头FFN。
-- **配置文件**: `conf/largekernel.yaml`
-
-#### 使用方法:
-
-- **执行光谱预测任务**:
-  ```bash
-  bash scripts/spectral_prediction/run_largekernel.sh
-  ```
-- **执行回归任务** (此模式下只使用归一化谱分支):
-  ```bash
-  bash scripts/regression/run_largekernel_regression.sh
-  ```
-
-### 3. DualBranchMoENet
-
-- **设计思想**: 结合了混合专家（Mixture of Experts, MoE）思想的经典双分支网络。
-  - **连续谱分支**: 对光谱进行FFT变换，然后使用一个**门控网络 (Gating Network)** 将频域特征动态地分配给多个“专家网络”（`SimplePyramidConv`）中的一部分进行处理。
-  - **归一化谱分支**: 一个带有**通道注意力(SE Block)**的多尺度卷积网络。
-- **配置文件**: `conf/dual_branch_moe.yaml`
-
-#### 使用方法:
-
-- **执行光谱预测任务**:
-  ```bash
-  bash scripts/spectral_prediction/run_dual_branch_moe.sh
-  ```
-- **执行回归任务** (此模式下只使用归一化谱分支):
-  ```bash
-  # 你可以模仿其他脚本，为此模型创建一个回归任务的训练脚本
-  ```
-
-### 4. 灵活的数据增强流水线
-
-本项目集成了一套强大且高度可配置的数据增强框架，用于在训练时动态处理数据，以抑制过拟合、提升模型泛化能力。
-
-- **配置驱动**: 所有数据增强的启用、参数和应用概率都在 `conf/stats.yaml` 文件中统一配置。
-- **即插即用**: 通过注册器模式，可以轻松地在 `utils/augmentations.py` 文件中添加新的自定义增强方法。
-
-#### 配置方法
-
-在 `conf/stats.yaml` 文件末尾，可以找到或添加 `augs_conf` 配置块。它是一个列表，每一项代表一个增强操作：
-
-```yaml
-# conf/stats.yaml
-
-# ... (省略前面的统计数据) ...
-
-# --- Data Augmentation Settings ---
-augs_conf:
-  # 增强操作一：添加高斯噪声
-  - name: 'add_noise'
-    enabled: true         # 开关：true表示启用此增强
-    p: 0.5                # 应用概率：每个样本有50%的几率应用此增强
-    params: {sigma: 0.01} # 传递给增强类的参数
-  
-  # 增强操作二：随机平移
-  - name: 'random_shift'
-    enabled: true
-    p: 0.5
-    params: {max_shift: 2}
-
-  # 增强操作三：随机缩放 (当前被关闭)
-  - name: 'random_scaling'
-    enabled: false
-    p: 0.3
-    params: {min_scale: 0.9, max_scale: 1.1}
-```
-
-#### 如何添加新的增强方法
-
-1. 打开 `utils/augmentations.py` 文件。
-2. 创建一个继承自 `Augmentation` 的新类。
-3. 实现 `__init__` (如果需要参数) 和 `__call__` (核心处理逻辑) 方法。
-4. 在类定义的上方，使用 `@register_augmentation('your_new_aug_name')` 装饰器进行注册。
-5. 在 `conf/stats.yaml` 的 `augs_conf` 列表中加入新方法的配置即可。

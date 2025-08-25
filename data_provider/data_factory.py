@@ -34,47 +34,47 @@ data_dict = {
 
 def data_provider(args, flag, label_scaler=None, feature_scaler=None):
     Data = data_dict[args.data] # 根据args.dataset选择数据集类
-    timeenc = 0 if args.embed != 'timeF' else 1
+    # timeenc = 0 if args.embed != 'timeF' else 1
 
     shuffle_flag = False if (flag == 'test' or flag == 'TEST') else True
     drop_last = False
     batch_size = args.batch_size
-    freq = args.freq
+    # freq = args.freq
 
-    if args.task_name == 'anomaly_detection':
-        drop_last = False
-        data_set = Data(
-            args = args,
-            root_path=args.root_path,
-            win_size=args.seq_len,
-            flag=flag,
-        )
-        print(flag, len(data_set))
-        data_loader = DataLoader(
-            data_set,
-            batch_size=batch_size,
-            shuffle=shuffle_flag,
-            num_workers=args.num_workers,
-            drop_last=drop_last)
-        return data_set, data_loader
-    elif args.task_name == 'classification':
-        drop_last = False
-        data_set = Data(
-            args = args,
-            root_path=args.root_path,
-            flag=flag,
-        )
+    # if args.task_name == 'anomaly_detection':
+    #     drop_last = False
+    #     data_set = Data(
+    #         args = args,
+    #         root_path=args.root_path,
+    #         win_size=args.seq_len,
+    #         flag=flag,
+    #     )
+    #     print(flag, len(data_set))
+    #     data_loader = DataLoader(
+    #         data_set,
+    #         batch_size=batch_size,
+    #         shuffle=shuffle_flag,
+    #         num_workers=args.num_workers,
+    #         drop_last=drop_last)
+    #     return data_set, data_loader
+    # elif args.task_name == 'classification':
+    #     drop_last = False
+    #     data_set = Data(
+    #         args = args,
+    #         root_path=args.root_path,
+    #         flag=flag,
+    #     )
 
-        data_loader = DataLoader(
-            data_set,
-            batch_size=batch_size,
-            shuffle=shuffle_flag,
-            num_workers=args.num_workers,
-            drop_last=drop_last,
-            collate_fn=lambda x: collate_fn(x, max_len=args.seq_len)
-        )
-        return data_set, data_loader
-    elif args.task_name == 'regression' or args.task_name == 'stellar_parameter_estimation':
+    #     data_loader = DataLoader(
+    #         data_set,
+    #         batch_size=batch_size,
+    #         shuffle=shuffle_flag,
+    #         num_workers=args.num_workers,
+    #         drop_last=drop_last,
+    #         collate_fn=lambda x: collate_fn(x, max_len=args.seq_len)
+    #     )
+    #     return data_set, data_loader
+    if args.task_name == 'regression' or args.task_name == 'stellar_parameter_estimation':
         # 恒星光谱数据回归任务的特殊处理
         data_set = Data( # 创建数据集对象
             args = args,
@@ -90,7 +90,7 @@ def data_provider(args, flag, label_scaler=None, feature_scaler=None):
             num_workers=args.num_workers,
             drop_last=drop_last)
         return data_set, data_loader
-    elif args.task_name == 'spectral_prediction':
+    elif  args.task_name == 'spectral_prediction':
         data_set = Data(
             args=args,
             flag=flag,
@@ -107,26 +107,26 @@ def data_provider(args, flag, label_scaler=None, feature_scaler=None):
             worker_init_fn=fix_seed_worker
         )
         return data_set, data_loader
-    else:
-        if args.data == 'm4':
-            drop_last = False
-        data_set = Data(
-            args = args,
-            root_path=args.root_path,
-            data_path=args.data_path,
-            flag=flag,
-            size=[args.seq_len, args.label_len, args.pred_len],
-            features=args.features,
-            target=args.target,
-            timeenc=timeenc,
-            freq=freq,
-            seasonal_patterns=args.seasonal_patterns
-        )
-        print(flag, len(data_set))
-        data_loader = DataLoader(
-            data_set,
-            batch_size=batch_size,
-            shuffle=shuffle_flag,
-            num_workers=args.num_workers,
-            drop_last=drop_last)
-        return data_set, data_loader
+    # else:
+    #     if args.data == 'm4':
+    #         drop_last = False
+    #     data_set = Data(
+    #         args = args,
+    #         root_path=args.root_path,
+    #         data_path=args.data_path,
+    #         flag=flag,
+    #         size=[args.seq_len, args.label_len, args.pred_len],
+    #         features=args.features,
+    #         target=args.target,
+    #         timeenc=timeenc,
+    #         freq=freq,
+    #         seasonal_patterns=args.seasonal_patterns
+    #     )
+    #     print(flag, len(data_set))
+    #     data_loader = DataLoader(
+    #         data_set,
+    #         batch_size=batch_size,
+    #         shuffle=shuffle_flag,
+    #         num_workers=args.num_workers,
+    #         drop_last=drop_last)
+    #     return data_set, data_loader
