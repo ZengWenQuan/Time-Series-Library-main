@@ -429,85 +429,54 @@ class Exp_Basic(object):
     def test_all(self):
         # 1. 加载最优模型
         checkpoint_path = self.args.checkpoints
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
-            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
-        else:
+        if not (checkpoint_path and os.path.exists(checkpoint_path)):
             self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting test_all.")
             return
+        self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
+        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
 
-        # 2. 创建保存目录
-        save_dir = os.path.join(self.args.run_dir, 'test_all_results')
-        os.makedirs(save_dir, exist_ok=True)
+        # --- Loop through each dataset (train, val, test) and evaluate ---
+        dataset_splits = {
+            'train': (self.train_data, self.train_loader),
+            'val': (self.vali_data, self.vali_loader),
+            'test': (self.test_data, self.test_loader)
+        }
 
-        # 3. 手动合并已加载的数据集
-        self.logger.info("--- Starting Test on ALL data (train+val+test) ---")
-        
-        datasets = [d for d in [self.train_data, self.vali_data, self.test_data] if d is not None]
-        if not datasets:
-            self.logger.error("No data found to combine. Aborting test_all.")
-            return
+        for split_name, (data, loader) in dataset_splits.items():
+            if data is None or loader is None:
+                self.logger.warning(f"No data/loader for '{split_name}' split. Skipping.")
+                continue
 
-        # 从已加载的Dataset对象中提取Numpy数组并合并
-        all_continuum = np.concatenate([d.data_continuum for d in datasets], axis=0)
-        all_normalized = np.concatenate([d.data_normalized for d in datasets], axis=0)
-        all_labels = np.concatenate([d.data_label for d in datasets], axis=0)
-        all_obsids = np.concatenate([d.obsids for d in datasets], axis=0)
-
-        # 临时定义一个用于全量数据评估的Dataset类
-        class _CombinedDataset(torch.utils.data.Dataset):
-            def __init__(self, continuum, normalized, labels, obsids):
-                self.continuum = continuum
-                self.normalized = normalized
-                self.labels = labels
-                self.obsids = obsids
+            self.logger.info(f"--- Starting evaluation on {split_name} data ---")
             
-            def __len__(self):
-                return len(self.labels)
-                
-            def __getitem__(self, index):
-                x_combined = np.stack([self.continuum[index], self.normalized[index]], axis=-1)
-                return (
-                    torch.from_numpy(x_combined).float(),
-                    torch.from_numpy(self.labels[index]).float(),
-                    self.obsids[index]
-                )
+            # 2. 创建保存目录
+            save_dir = os.path.join(self.args.run_dir, 'test_all_results', split_name)
+            os.makedirs(save_dir, exist_ok=True)
 
-        combined_dataset = _CombinedDataset(all_continuum, all_normalized, all_labels, all_obsids)
-        
-        all_loader = torch.utils.data.DataLoader(
-            combined_dataset,
-            batch_size=self.args.batch_size,
-            shuffle=False,
-            num_workers=self.args.num_workers,
-            drop_last=False
-        )
-        self.logger.info(f"Combined dataset created with {len(combined_dataset)} samples.")
+            # 3. 在当前数据集上评估
+            loss, preds, trues, obsids = self.vali(data, loader, self._select_criterion())
 
-        # 4. 在合并后的数据集上评估
-        test_loss, test_preds, test_trues, test_obsids = self.vali(combined_dataset, all_loader, self._select_criterion())
+            if preds is None:
+                self.logger.warning(f"Evaluation on '{split_name}' returned no results. Skipping.")
+                continue
 
-        if test_preds is None:
-            self.logger.warning("Full dataset evaluation returned no results. Skipping metric calculation and saving.")
-            return
+            # 4. 保存预测值和真实值到CSV
+            self.logger.info(f"Saving predictions for '{split_name}' to {save_dir}")
+            pred_df = pd.DataFrame({'obsid': obsids})
+            for i, target_name in enumerate(self.targets):
+                pred_df[f'{target_name}_true'] = trues[:, i]
+                pred_df[f'{target_name}_pred'] = preds[:, i]
+            pred_df.to_csv(os.path.join(save_dir, 'predictions.csv'), index=False)
 
-        # 5. 保存预测值和真实值到CSV
-        self.logger.info(f"Saving predictions to {save_dir}")
-        pred_df_data = {'obsid': test_obsids}
-        for i, target_name in enumerate(self.targets):
-            pred_df_data[f'{target_name}_true'] = test_trues[:, i]
-            pred_df_data[f'{target_name}_pred'] = test_preds[:, i]
-        
-        pred_df = pd.DataFrame(pred_df_data)
-        pred_df.to_csv(os.path.join(save_dir, 'predictions.csv'), index=False)
+            # 5. 计算并保存所有指标
+            self.logger.info(f"Calculating and saving metrics for '{split_name}'...")
+            reg_metrics = calculate_metrics(preds, trues, self.targets)
+            cls_metrics = calculate_feh_classification_metrics(preds, trues, self.args.feh_index)
+            
+            save_regression_metrics(reg_metrics, save_dir, self.args.targets, phase=f"final_{split_name}")
+            save_feh_classification_metrics(cls_metrics, save_dir, phase=f"final_{split_name}")
 
-        # 6. 计算并保存所有指标
-        self.logger.info("Calculating and saving final metrics for full dataset...")
-        reg_metrics = calculate_metrics(test_preds, test_trues, self.targets)
-        cls_metrics = calculate_feh_classification_metrics(test_preds, test_trues, self.args.feh_index)
-        
-        save_regression_metrics(reg_metrics, save_dir, self.args.targets, phase="final_test_all")
-        save_feh_classification_metrics(cls_metrics, save_dir, phase="final_test_all")
+        self.logger.info("--- test_all completed ---")
 
     def _select_criterion(self):
         loss=self.args.loss.lower()
