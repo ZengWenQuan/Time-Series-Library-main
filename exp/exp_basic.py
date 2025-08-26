@@ -288,8 +288,8 @@ class Exp_Basic(object):
                 if self.scaler is not None:
                     with torch.amp.autocast('cuda'):
                         outputs = self.model(batch_x.float().to(self.device))
-                        loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
-                    
+                        #loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
+                        loss=criterion(outputs, batch_y.float().to(self.device))
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(model_optim)
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
@@ -298,7 +298,8 @@ class Exp_Basic(object):
                 else:
                     # Standard training
                     outputs = self.model(batch_x.float().to(self.device))
-                    loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
+                    #loss = sum(criterion(outputs[:, i], batch_y[:, i].float().to(self.device)) * self.args.loss_weights[i]/sum(self.args.loss_weights) for i in range(outputs.shape[1])) if hasattr(self.args, 'loss_weights') and self.args.loss_weights and len(self.args.loss_weights) == outputs.shape[1] else criterion(outputs, batch_y.float().to(self.device))
+                    loss=criterion(outputs, batch_y.float().to(self.device))
                     loss.backward()
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
                     model_optim.step()
