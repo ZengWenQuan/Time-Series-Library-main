@@ -59,16 +59,27 @@ class GenericSpectralModel(nn.Module):
             if hasattr(configs, 'sample_batch') and configs.sample_batch is not None:
                 try:
                     print("Performing forward pass with a real batch to initialize lazy modules...")
-                    # 核心修改：确保传入的样本在CPU上，以匹配此时还在CPU上的模型
                     sample_batch = configs.sample_batch.to('cpu')
                     self.eval()
                     with torch.no_grad():
-                        # 直接使用传入的、已经在正确设备上的样本
                         self(sample_batch)
                     self.train()
                     print("Lazy modules initialized successfully.")
+
+                    # --- Calculate FLOPs and Parameters ---
+                    try:
+                        from thop import profile
+                        macs, params = profile(self, inputs=(sample_batch, ), verbose=False)
+                        self.flops = macs * 2
+                        self.params = params
+                        print(f"FLOPs and Parameters calculated: {self.flops / 1e9:.2f} GFLOPs, {self.params / 1e6:.2f} M Params")
+                    except ImportError:
+                        print("Warning: `thop` library not installed. Skipping FLOPs calculation. Run `pip install thop`.")
+                        self.flops = 0
+                        self.params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+
                 except Exception as e:
-                    print(f"警告: 使用真实样本进行虚拟前向传播失败。错误: {e}")
+                    print(f"警告: 使用真实样本进行虚拟前向传播或FLOPs计算失败。错误: {e}")
             else:
                 print("警告: 'initialize_lazy' 设置为True，但没有提供样本。跳过虚拟前向传播。")
 

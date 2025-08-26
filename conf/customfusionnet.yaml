@@ -4,7 +4,7 @@
 training_settings:
   targets: ['Teff', 'logg', 'FeH', 'CFe']
   loss_function: 'mse'
-  loss_weights: [1.0, 1.0, 1.5, 1.2]
+  loss_weights: [1.0, 1.0, 1.0, 1.0]
   lradj: 'cos'
   mixed_precision: True
 
@@ -56,5 +56,5 @@ head_config:
     layers:
       - {out_channels: 128, kernel_size: 3, pool_size: 2}
       - {out_channels: 64, kernel_size: 3, pool_size: 2}
-  ffn_layers: [256, 128]
+  ffn_layers: [1024,256, 128]
   dropout: 0.3

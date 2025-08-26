@@ -419,15 +419,22 @@ def save_regression_metrics(metrics_dict, save_dir, param_names=None, phase="tes
             
             ax.scatter(pred, true, alpha=0.5, s=10) # Smaller points for clarity
             
-            # 添加对角线
+            # 添加对角线 (y=x)，设置为黑色
             min_val = min(np.min(pred), np.min(true))
             max_val = max(np.max(pred), np.max(true))
-            ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1)
+            ax.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=1, label='y=x')
+
+            # 计算并绘制3-sigma边界线，设置为红色
+            residuals = true - pred
+            sigma = np.std(residuals)
+            ax.plot([min_val, max_val], [min_val + 3 * sigma, max_val + 3 * sigma], 'r--', linewidth=1, label='3σ')
+            ax.plot([min_val, max_val], [min_val - 3 * sigma, max_val - 3 * sigma], 'r--', linewidth=1)
             
             ax.set_title(f'{param} Prediction vs Truth')
             ax.set_xlabel('Predicted Value')
             ax.set_ylabel('True Value')
             ax.grid(True)
+            ax.legend() # 显示图例
 
             # --- Add Metrics Annotation ---
             mae = metrics_dict.get(f'{param}_mae', float('nan'))

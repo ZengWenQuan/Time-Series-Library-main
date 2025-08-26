@@ -135,7 +135,6 @@ class Exp_Basic(object):
             
             # --- Per-Submodule Parameter Count ---
             f.write("模块参数量:\n")
-            total_params = sum(p.numel() for p in model.parameters())
             model_to_inspect = model.module if isinstance(model, nn.DataParallel) else model
             
             submodule_attrs = [
@@ -154,7 +153,17 @@ class Exp_Basic(object):
                         if submodule_params > 0:
                             f.write(f"  - {attr}: {submodule_params:,} 参数\n")
             
-            f.write(f"\n总参数量: {total_params:,}\n\n")
+            # --- ADDED: Write Overall Complexity ---
+            f.write("\n--- 模型复杂度 ---")
+            if hasattr(model_to_inspect, 'params') and model_to_inspect.params > 0:
+                f.write(f"总参数量: {model_to_inspect.params / 1e6:.2f} M\n")
+            else: # Fallback if params not pre-calculated
+                total_params = sum(p.numel() for p in model.parameters())
+                f.write(f"总参数量: {total_params / 1e6:.2f} M\n")
+
+            if hasattr(model_to_inspect, 'flops') and model_to_inspect.flops > 0:
+                f.write(f"GFLOPs: {model_to_inspect.flops / 1e9:.2f}\n")
+            f.write("------------------\n\n")
 
             # --- Per-Layer Parameter Count (Original Logic) ---
             f.write("每层详细参数:\n")
@@ -339,7 +348,7 @@ class Exp_Basic(object):
             
             # --- Log to MLflow ---
             if (epoch + 1) % self.args.vali_interval == 0:
-                self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
+                #self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
                 if train_reg_metrics: print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
                 if vali_reg_metrics: print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
                 if locals().get('test_reg_metrics',None): print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")

@@ -11,8 +11,10 @@ mlruns/
 .Python
 build/
 .claude/
+no_trace/
 .vscode/
 gemini_context/
+latex/
 develop-eggs/
 dist/
 downloads/
