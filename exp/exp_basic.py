@@ -58,11 +58,6 @@ class Exp_Basic(object):
         try:
             with open(self.args.model_conf, 'r') as f:
                 model_config = yaml.safe_load(f)
-            
-            # --- 新增：从 head_config 中加载 initialize_lazy 开关 ---
-            head_config = model_config.get('head_config', {})
-            self.args.initialize_lazy = head_config.get('initialize_lazy', False)
-
             training_settings = model_config.get('training_settings', {})
             
             # --- 强制从 YAML 文件中获取 'targets' ---

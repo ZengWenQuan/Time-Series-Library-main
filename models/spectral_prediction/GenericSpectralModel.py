@@ -24,21 +24,29 @@ class GenericSpectralModel(nn.Module):
         with open(configs.model_conf, 'r') as f:
             model_config = yaml.safe_load(f)
 
+        # --- 新增：获取全局设置并向下传递 ---
+        global_settings = model_config.get('global_settings', {})
+
         # --- 模仿 CustomFusionNet 的初始化逻辑 ---
 
         # 1. 初始化归一化谱分支 (所有任务都需要)
+        norm_branch_config = model_config['normalized_branch_config']
+        norm_branch_config.update(global_settings)
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-        self.normalized_branch = NormBranchClass(model_config['normalized_branch_config'])
+        self.normalized_branch = NormBranchClass(norm_branch_config)
         
         # 2. 根据任务类型，选择性地初始化其他模块
         if self.task_name == 'spectral_prediction':
+            cont_branch_config = model_config['continuum_branch_config']
+            cont_branch_config.update(global_settings)
             ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-            self.continuum_branch = ContBranchClass(model_config['continuum_branch_config'])
+            self.continuum_branch = ContBranchClass(cont_branch_config)
             
-            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
             fusion_config = model_config['fusion_config']
-            fusion_config['dim_norm'] = self.normalized_branch.output_dim
-            fusion_config['dim_cont'] = self.continuum_branch.output_dim
+            fusion_config.update(global_settings)
+            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
+            fusion_config['channels_norm'] = self.normalized_branch.output_channels
+            fusion_config['channels_cont'] = self.continuum_branch.output_channels
             self.fusion = FusionClass(fusion_config)
             head_input_dim = self.fusion.output_dim
         
@@ -49,39 +57,31 @@ class GenericSpectralModel(nn.Module):
             raise ValueError(f"未知的任务类型: {self.task_name}")
 
         # 3. 初始化预测头模块
-        HeadClass = HEAD_REGISTRY[model_config['head_name']]
         head_config = model_config['head_config']
+        head_config.update(global_settings)
+        HeadClass = HEAD_REGISTRY[model_config['head_name']]
         head_config['head_input_dim'] = head_input_dim
-        self.prediction_head = HeadClass(head_config, self.targets)
+        head_config['targets'] = self.targets
+        self.prediction_head = HeadClass(head_config)
 
-        # --- 最终版：使用传入的真实样本初始化 ---
-        if model_config.get('initialize_lazy', True):
-            if hasattr(configs, 'sample_batch') and configs.sample_batch is not None:
-                try:
-                    print("Performing forward pass with a real batch to initialize lazy modules...")
-                    sample_batch = configs.sample_batch.to('cpu')
-                    self.eval()
-                    with torch.no_grad():
-                        self(sample_batch)
-                    self.train()
-                    print("Lazy modules initialized successfully.")
-
-                    # --- Calculate FLOPs and Parameters ---
-                    try:
-                        from thop import profile
-                        macs, params = profile(self, inputs=(sample_batch, ), verbose=False)
-                        self.flops = macs * 2
-                        self.params = params
-                        print(f"FLOPs and Parameters calculated: {self.flops / 1e9:.2f} GFLOPs, {self.params / 1e6:.2f} M Params")
-                    except ImportError:
-                        print("Warning: `thop` library not installed. Skipping FLOPs calculation. Run `pip install thop`.")
-                        self.flops = 0
-                        self.params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-                except Exception as e:
-                    print(f"警告: 使用真实样本进行虚拟前向传播或FLOPs计算失败。错误: {e}")
-            else:
-                print("警告: 'initialize_lazy' 设置为True，但没有提供样本。跳过虚拟前向传播。")
+                # --- FLOPs and Parameters Calculation ---
+        if hasattr(configs, 'sample_batch') and configs.sample_batch is not None:
+            try:
+                from thop import profile
+                self.eval()
+                with torch.no_grad():
+                    macs, params = profile(self, inputs=(configs.sample_batch.to('cpu'),), verbose=False)
+                self.train()
+                
+                self.flops = macs * 2
+                self.params = params
+                print(f"FLOPs and Parameters calculated: {self.flops / 1e9:.2f} GFLOPs, {self.params / 1e6:.2f} M Params")
+            except ImportError:
+                print("Warning: `thop` library not installed. Skipping FLOPs calculation. Run `pip install thop`.")
+                self.flops = 0
+                self.params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+            except Exception as e:
+                print(f"Warning: FLOPs calculation failed. Error: {e}")
 
     def forward(self, x, x_normalized=None):
         # --- 模仿 CustomFusionNet 的前向传播逻辑 ---

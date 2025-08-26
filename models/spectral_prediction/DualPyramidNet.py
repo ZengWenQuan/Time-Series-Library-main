@@ -17,30 +17,36 @@ class DualPyramidNet(nn.Module):
         self.task_name = configs.task_name
         self.targets = configs.targets
         self.feature_size = configs.feature_size
-        self.label_size = configs.label_size
         with open(configs.model_conf, 'r') as f: model_config = yaml.safe_load(f)
 
+        global_settings = model_config.get('global_settings', {})
+
         # Branches
+        branch_config = model_config['branch_config']
+        branch_config.update(global_settings)
         BranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['branch_name']]
-        self.normalized_extractor = BranchClass(model_config['branch_config'])
+        self.normalized_extractor = BranchClass(branch_config)
         if self.task_name == 'spectral_prediction':
-            self.continuum_extractor = BranchClass(model_config['branch_config'])
+            self.continuum_extractor = BranchClass(branch_config)
             
             # Fusion
-            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
             fusion_config = model_config['fusion_config']
-            fusion_config['dim_norm'] = self.normalized_extractor.output_dim
-            fusion_config['dim_cont'] = self.continuum_extractor.output_dim
+            fusion_config.update(global_settings)
+            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
+            fusion_config['channels_norm'] = self.normalized_extractor.output_channels
+            fusion_config['channels_cont'] = self.continuum_extractor.output_channels
             self.fusion = FusionClass(fusion_config)
             head_input_dim = self.fusion.output_dim
         else: # regression
             head_input_dim = self.normalized_extractor.output_dim
 
         # Head
-        HeadClass = HEAD_REGISTRY[model_config['head_name']]
         head_config = model_config['head_config']
-        head_config['ffn_input_dim'] = head_input_dim
-        self.prediction_head = HeadClass(head_config, self.targets, self.label_size)
+        head_config.update(global_settings)
+        HeadClass = HEAD_REGISTRY[model_config['head_name']]
+        head_config['head_input_dim'] = head_input_dim
+        head_config['targets'] = self.targets
+        self.prediction_head = HeadClass(head_config)
 
     def forward(self, x, x_normalized=None):
         if self.task_name == 'regression': 

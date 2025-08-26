@@ -20,28 +20,36 @@ class DualBranchMoENet(nn.Module):
         self.targets = configs.targets
         with open(configs.model_conf, 'r') as f: config = yaml.safe_load(f)
         
+        global_settings = config.get('global_settings', {})
         norm_type = config['normalization_type']
 
+        continuum_branch_config = config['continuum_branch_config']
+        continuum_branch_config.update(global_settings)
         ContBranchClass = CONTINUUM_BRANCH_REGISTRY[config['continuum_branch_name']]
-        self.freq_branch = ContBranchClass(config['continuum_branch_config'], norm_type)
+        self.freq_branch = ContBranchClass(continuum_branch_config, norm_type)
 
+        normalized_branch_config = config['normalized_branch_config']['pyramid_with_attention']
+        normalized_branch_config.update(global_settings)
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[config['normalized_branch_name']]
-        self.line_branch = NormBranchClass(config['normalized_branch_config']['pyramid_with_attention'], norm_type)
+        self.line_branch = NormBranchClass(normalized_branch_config, norm_type)
 
         if self.task_name == 'spectral_prediction':
-            FusionClass = FUSION_REGISTRY[config['fusion_name']]
             fusion_config = config['fusion_config']
-            fusion_config['dim_cont'] = self.freq_branch.output_dim
-            fusion_config['dim_norm'] = self.line_branch.output_dim
+            fusion_config.update(global_settings)
+            FusionClass = FUSION_REGISTRY[config['fusion_name']]
+            fusion_config['channels_cont'] = self.freq_branch.output_channels
+            fusion_config['channels_norm'] = self.line_branch.output_channels
             self.fusion = FusionClass(fusion_config)
             head_input_dim = self.fusion.output_dim
         else: # regression
             head_input_dim = self.line_branch.output_dim
 
-        HeadClass = HEAD_REGISTRY[config['head_name']]
         head_config = config['head_config']
+        head_config.update(global_settings)
+        HeadClass = HEAD_REGISTRY[config['head_name']]
         head_config['head_input_dim'] = head_input_dim
-        self.prediction_head = HeadClass(head_config, self.targets)
+        head_config['targets'] = self.targets
+        self.prediction_head = HeadClass(head_config)
 
     def forward(self, x, x_normalized=None):
         if self.task_name == 'regression': return self.forward_regression(x)

@@ -20,33 +20,42 @@ class LargeKernelConvNet(nn.Module):
         self.targets = configs.targets
         with open(configs.model_conf, 'r') as f: model_config = yaml.safe_load(f)
 
+        global_settings = model_config.get('global_settings', {})
+
         # Branches
+        normalized_branch_config = model_config['normalized_branch_config']
+        normalized_branch_config.update(global_settings)
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-        self.upsample_branch = NormBranchClass(model_config['normalized_branch_config'])
+        self.upsample_branch = NormBranchClass(normalized_branch_config)
         
         if self.task_name == 'spectral_prediction':
+            continuum_branch_config = model_config['continuum_branch_config']
+            continuum_branch_config.update(global_settings)
             ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-            self.large_kernel_branch = ContBranchClass(model_config['continuum_branch_config'])
+            self.large_kernel_branch = ContBranchClass(continuum_branch_config)
             
             # Fusion
+            fusion_config = model_config['fusion_config']
+            fusion_config.update(global_settings)
             FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
             if FusionClass.__name__ == 'ConcatFusion':
                 self.fusion = FusionClass()
                 self.fusion.output_dim = self.upsample_branch.output_dim + self.large_kernel_branch.output_dim
             else:
-                fusion_config = model_config['fusion_config']
-                fusion_config['dim_norm'] = self.upsample_branch.output_dim
-                fusion_config['dim_cont'] = self.large_kernel_branch.output_dim
+                fusion_config['channels_norm'] = self.upsample_branch.output_channels
+                fusion_config['channels_cont'] = self.large_kernel_branch.output_channels
                 self.fusion = FusionClass(fusion_config)
             head_input_dim = self.fusion.output_dim
         else: # regression
             head_input_dim = self.upsample_branch.output_dim
 
         # Head
-        HeadClass = HEAD_REGISTRY[model_config['head_name']]
         head_config = model_config['head_config']
+        head_config.update(global_settings)
+        HeadClass = HEAD_REGISTRY[model_config['head_name']]
         head_config['head_input_dim'] = head_input_dim
-        self.prediction_head = HeadClass(head_config, self.targets)
+        head_config['targets'] = self.targets
+        self.prediction_head = HeadClass(head_config)
 
     def forward(self, x, x_normalized=None):
         if self.task_name == 'regression': 

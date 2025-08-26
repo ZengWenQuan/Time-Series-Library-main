@@ -16,31 +16,39 @@ class DualSpectralNet(nn.Module):
         super(DualSpectralNet, self).__init__()
         self.task_name = configs.task_name
         self.targets = configs.targets
-        self.label_size = len(self.targets)
         self.feature_size = configs.feature_size
 
         with open(configs.model_conf, 'r') as f:
             model_config = yaml.safe_load(f)
 
-        # Instantiate branches
-        ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-        self.continuum_branch = ContBranchClass(model_config['continuum_branch_config'])
+        global_settings = model_config.get('global_settings', {})
 
+        # Instantiate branches
+        continuum_branch_config = model_config['continuum_branch_config']
+        continuum_branch_config.update(global_settings)
+        ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
+        self.continuum_branch = ContBranchClass(continuum_branch_config)
+
+        normalized_branch_config = model_config['normalized_branch_config']
+        normalized_branch_config.update(global_settings)
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-        self.normalized_branch = NormBranchClass(model_config['normalized_branch_config'])
+        self.normalized_branch = NormBranchClass(normalized_branch_config)
 
         # Instantiate fusion module
-        FusionModule = FUSION_REGISTRY[model_config['fusion_name']]
         fusion_config = model_config['fusion_config']
-        fusion_config['dim_cont'] = self.continuum_branch.output_dim
-        fusion_config['dim_norm'] = self.normalized_branch.output_dim
+        fusion_config.update(global_settings)
+        FusionModule = FUSION_REGISTRY[model_config['fusion_name']]
+        fusion_config['channels_cont'] = self.continuum_branch.output_channels
+        fusion_config['channels_norm'] = self.normalized_branch.output_channels
         self.fusion = FusionModule(fusion_config)
 
         # Instantiate prediction head
-        PredictionHead = HEAD_REGISTRY[model_config['head_name']]
         head_config = model_config['head_config']
-        head_config['input_dim'] = self.fusion.output_dim
-        self.prediction_head = PredictionHead(head_config, self.label_size)
+        head_config.update(global_settings)
+        PredictionHead = HEAD_REGISTRY[model_config['head_name']]
+        head_config['head_input_dim'] = self.fusion.output_dim
+        head_config['targets'] = self.targets
+        self.prediction_head = PredictionHead(head_config)
 
     def forward(self, x, x_normalized=None):
         if self.task_name == 'spectral_prediction':
