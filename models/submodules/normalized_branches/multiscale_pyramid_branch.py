@@ -91,9 +91,5 @@ class MultiScalePyramidBranch(nn.Module):
         self.output_length = L_in
 
     def forward(self, x):
-        # 保证输入是 (B, C, L) 的形状
-        if x.dim() == 2:
-            x = x.unsqueeze(1)
-        
         x = self.pyramid(x)
         return x

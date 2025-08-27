@@ -83,8 +83,6 @@ class NormalizedSpectrumBranch(nn.Module):
         self.output_shape_tuple = (self.output_channels, self.output_length)
 
     def forward(self, x):
-        if x.dim() == 2:
-            x = x.unsqueeze(1)
         x = self.input_proj(x)
         for block in self.pyramid_blocks: 
             x = block(x)

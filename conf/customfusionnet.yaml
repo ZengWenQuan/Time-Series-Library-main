@@ -2,7 +2,7 @@
 
 # --- 新增：定义可复用的锚点 ---
 anchor_vars:
-  input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整
+  input_len: &input_l 3834 # 假设输入长度，需要根据实际数据调整
   fusion_channels: &fusion_c 16
   fusion_len: &fusion_l 128 # 假设融合后的目标长度
 

@@ -21,7 +21,6 @@ class LargeKernelBranch(nn.Module):
         self.output_dim = config['fc_dim']
 
     def forward(self, x):
-        x = x.unsqueeze(1) # [B, L] -> [B, 1, L]
         x = F.relu(self.conv(x))
         x = self.pool(x).squeeze(-1)
         x = self.fc(x)

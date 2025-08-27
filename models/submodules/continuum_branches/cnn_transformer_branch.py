@@ -48,7 +48,6 @@ class ContinuumBranch(nn.Module):
         self.output_dim = trans_config['d_model']
         
     def forward(self, x):
-        x = x.unsqueeze(1)
         for cnn_layer in self.cnn_layers: x = cnn_layer(x)
         x = x.permute(0, 2, 1)
         x = self.feature_projection(x)

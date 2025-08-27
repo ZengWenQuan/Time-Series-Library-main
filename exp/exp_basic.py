@@ -111,57 +111,76 @@ class Exp_Basic(object):
             raise ValueError(f"Model '{self.args.model}' is not registered. "
                              f"Available models: {list(MODEL_REGISTRY.keys())}")
         
-        print(f"Building model: {self.args.model}")
-        # Add sample_batch to the config object
+        self.logger.info(f"Building model: {self.args.model}")
+        # Add sample_batch to the config object, which is used by the model's __init__
         self.args.sample_batch = sample_batch
         model = model_class(self.args).float()
-
         model.to(self.device)
+
+        # --- GFLOPs and Parameters Calculation ---
+        model_to_inspect = model.module if isinstance(model, nn.DataParallel) else model
+        
+        # --- ADDED: Per-submodule profiling ---
+        submodule_stats = {}
+        if sample_batch is not None and hasattr(model_to_inspect, 'profile_model'):
+            # Profile requires input on the same device as the model
+            sample_batch_device = sample_batch[0].to(self.device) if isinstance(sample_batch, list) else sample_batch.to(self.device)
+            submodule_stats = model_to_inspect.profile_model(sample_batch_device)
+
+        if sample_batch is not None:
+            from thop import profile
+            sample_batch_device = sample_batch[0].to(self.device) if isinstance(sample_batch, list) else sample_batch.to(self.device)
+            macs, params = profile(model_to_inspect, inputs=(sample_batch_device,), verbose=False)
+            model_to_inspect.flops = macs * 2
+            model_to_inspect.params = params
+            self.logger.info(f"Total FLOPs: {model_to_inspect.flops:,.0f}, Total Params: {model_to_inspect.params:,}")
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         
         # --- Model Summary Logic ---
-        # 模型在自己的__init__中完成初始化，所以这里可以直接计算参数
         info_model_path = os.path.join(self.args.run_dir, 'model.txt')
         with open(info_model_path, 'w') as f:
             f.write("模型结构:\n")
             f.write(f"{model}\n\n")
             
-            # --- Per-Submodule Parameter Count ---
-            f.write("模块参数量:\n")
-            model_to_inspect = model.module if isinstance(model, nn.DataParallel) else model
-            
-            submodule_attrs = [
-                'continuum_branch',
-                'normalized_branch',
-                'fusion',
-                'prediction_head'
-            ]
-            
-            # Check for submodule existence and count their parameters
-            for attr in submodule_attrs:
-                if hasattr(model_to_inspect, attr):
-                    submodule = getattr(model_to_inspect, attr)
-                    if isinstance(submodule, nn.Module):
-                        submodule_params = sum(p.numel() for p in submodule.parameters())
-                        if submodule_params > 0:
-                            f.write(f"  - {attr}: {submodule_params:,} 参数\n")
-            
-            # --- ADDED: Write Overall Complexity ---
-            f.write("\n--- 模型复杂度 ---")
-            if hasattr(model_to_inspect, 'params') and model_to_inspect.params > 0:
-                f.write(f"总参数量: {model_to_inspect.params / 1e6:.2f} M\n")
-            else: # Fallback if params not pre-calculated
-                total_params = sum(p.numel() for p in model.parameters())
-                f.write(f"总参数量: {total_params / 1e6:.2f} M\n")
+            # --- Per-Submodule Parameter Count & FLOPs ---
+            f.write("--- 子模块参数量与FLOPs ---")
+            if submodule_stats:
+                total_submodule_flops = 0
+                total_submodule_params = 0
+                for name, stats in submodule_stats.items():
+                    params_val = stats.get('params', 0)
+                    flops_val = stats.get('flops', 0)
+                    total_submodule_params += params_val
+                    total_submodule_flops += flops_val
+                    params_str = f"{params_val:,}"
+                    flops_str = f"{int(flops_val):,}"
+                    f.write(f"  - {name}: {params_str} Params, {flops_str} FLOPs\n")
+                f.write(f"  - Submodule Total: {total_submodule_params:,} Params, {int(total_submodule_flops):,} FLOPs\n")
 
-            if hasattr(model_to_inspect, 'flops') and model_to_inspect.flops > 0:
-                f.write(f"GFLOPs: {model_to_inspect.flops / 1e9:.2f}\n")
+            else: # Fallback to old method if profiling function doesn't exist or failed
+                f.write("  (Profiling function not available or failed, using parameter count fallback)")
+                submodule_attrs = ['continuum_branch', 'normalized_branch', 'fusion', 'prediction_head']
+                for attr in submodule_attrs:
+                    if hasattr(model_to_inspect, attr):
+                        submodule = getattr(model_to_inspect, attr)
+                        if isinstance(submodule, nn.Module):
+                            submodule_params = sum(p.numel() for p in submodule.parameters())
+                            if submodule_params > 0:
+                                f.write(f"  - {attr}: {submodule_params:,} Params\n")
+            
+            # --- Overall Complexity ---
+            f.write("\n--- 模型复杂度 (总计)---")
+            total_params = getattr(model_to_inspect, 'params', sum(p.numel() for p in model.parameters()))
+            f.write(f"总参数量: {total_params:,}\n")
+
+            if hasattr(model_to_inspect, 'flops'):
+                f.write(f"总FLOPs: {int(model_to_inspect.flops):,}\n")
             f.write("------------------\n\n")
 
-            # --- Per-Layer Parameter Count (Original Logic) ---
-            f.write("每层详细参数:\n")
+            # --- Per-Layer Parameter Count ---
+            f.write("每层详细参数:")
             for name, param in model.named_parameters():
                 f.write(f"  {name}: {param.numel():,} 参数\n")
 

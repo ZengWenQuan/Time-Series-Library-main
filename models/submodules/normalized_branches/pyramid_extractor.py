@@ -78,7 +78,6 @@ class PyramidFeatureExtractor(nn.Module):
         self.output_dim = input_ch
 
     def forward(self, x):
-        x = x.unsqueeze(1)
         x = self.input_proj(x)
         for block in self.pyramid_blocks:
             x = block(x)

@@ -1,98 +1,105 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ...registries import register_continuum_branch
 from ..normalized_branches.multiscale_pyramid_branch import MultiScalePyramidBranch
 
-class GatingNetwork(nn.Module):
-    """
-    门控网络: 分析频域特征，决定专家权重。
-    现在支持通过列表配置多层隐藏层。
-    """
-    def __init__(self, config):
-        super(GatingNetwork, self).__init__()
-        self.k = config['k']
-        input_dim = config['input_dim']
-        num_experts = config['num_experts']
-        hidden_dims = config.get('gating_hidden_dims', config.get('gating_hidden_dim'))
-
-        layers = []
-        current_dim = input_dim
-        
-        if isinstance(hidden_dims, list):
-            for h_dim in hidden_dims:
-                layers.append(nn.Linear(current_dim, h_dim))
-                layers.append(nn.ReLU())
-                current_dim = h_dim
-        else:
-            layers.append(nn.Linear(current_dim, hidden_dims))
-            layers.append(nn.ReLU())
-            current_dim = hidden_dims
-            
-        layers.append(nn.Linear(current_dim, num_experts))
-        self.gate = nn.Sequential(*layers)
+class FrequencyFeatureExtractor(nn.Module):
+    """封装频域特征提取逻辑"""
+    def __init__(self, fft_params):
+        super().__init__()
+        self.n_fft = fft_params.get('n_fft')
 
     def forward(self, x):
-        x_pooled = F.adaptive_avg_pool1d(x, 1).squeeze(-1)
-        logits = self.gate(x_pooled)
-        top_k_weights, top_k_indices = torch.topk(logits, self.k, dim=1)
-        return F.softmax(top_k_weights, dim=1), top_k_indices
+        # Expects (B, 1, L) or (B, L). Squeeze to (B, L) for FFT.
+        if x.dim() == 3:
+            x_squeezed = x.squeeze(1)
+        else:
+            x_squeezed = x
+        
+        x_fft = torch.fft.rfft(x_squeezed, n=self.n_fft)
+        return torch.stack([x_fft.real, x_fft.imag], dim=1)
+
+class AttentionGate(nn.Module):
+    """根据频域特征生成通道注意力权重"""
+    def __init__(self, config):
+        super(AttentionGate, self).__init__()
+        attention_channels = config['attention_channels']
+        conv_config = config['gating_conv_layers']
+        in_channels = 2
+        conv_layers = []
+        current_len = config['fft_len']
+
+        for layer_cfg in conv_config:
+            out_channels = layer_cfg['out_channels']
+            kernel_size = layer_cfg['kernel_size']
+            stride = layer_cfg.get('stride', 1)
+            padding = layer_cfg.get('padding', (kernel_size - 1) // 2)
+            pool_size = layer_cfg.get('pool_size', 2)
+            conv_layers.append(nn.Conv1d(in_channels, out_channels, kernel_size, stride, padding))
+            conv_layers.append(nn.BatchNorm1d(out_channels))
+            conv_layers.append(nn.ReLU(inplace=True))
+            if pool_size > 1:
+                conv_layers.append(nn.MaxPool1d(pool_size))
+            in_channels = out_channels
+            current_len = (current_len + 2 * padding - (kernel_size - 1) - 1) // stride + 1
+            if pool_size > 1:
+                current_len = (current_len - (pool_size - 1) - 1) // pool_size + 1
+
+        self.conv_block = nn.Sequential(*conv_layers)
+        fnn_input_dim = in_channels * current_len
+        fnn_hidden_dims = config.get('gating_hidden_dims', [])
+        fnn_layers = []
+        current_dim = fnn_input_dim
+        for h_dim in fnn_hidden_dims:
+            fnn_layers.append(nn.Linear(current_dim, h_dim))
+            fnn_layers.append(nn.ReLU(inplace=True))
+            current_dim = h_dim
+        
+        fnn_layers.append(nn.Linear(current_dim, attention_channels))
+        fnn_layers.append(nn.Sigmoid())
+        self.gate_fnn = nn.Sequential(*fnn_layers)
+
+    def forward(self, x):
+        x_conv = self.conv_block(x)
+        x_flat = x_conv.view(x_conv.size(0), -1)
+        attention_weights = self.gate_fnn(x_flat)
+        return attention_weights
 
 @register_continuum_branch
-class CustomMoEBranch(nn.Module):
+class CustomAttentiveBranch(nn.Module):
     """
-    自定义混合专家（MoE）分支。
-    - 门控网络作用于频域（STFT结果）。
-    - 专家网络（MultiScalePyramidBranch）作用于时域（原始连续谱）。
+    A convolutional branch with a parallel channel attention mechanism.
+    The attention weights are derived from frequency-domain features.
     """
     def __init__(self, config):
-        super(CustomMoEBranch, self).__init__()
-        self.fft_params = config['fft']
-        self.moe_params = config['moe']
+        super(CustomAttentiveBranch, self).__init__()
         
-        # 1. 初始化门控网络 (遵循单一config原则)
-        # 将动态计算的 input_dim 添加到 moe_params 中
-        self.moe_params['input_dim'] = self.fft_params['n_fft'] // 2 + 1
-        self.gating_network = GatingNetwork(self.moe_params)
+        # 1. Main convolutional path
+        self.main_branch = MultiScalePyramidBranch(config['main_branch_config'])
+        main_branch_out_channels = self.main_branch.output_channels
+
+        # 2. Attention path
+        self.feature_extractor = FrequencyFeatureExtractor(config['fft'])
         
-        # 2. 初始化专家网络列表
-        expert_config = config['expert_config']
-        self.experts = nn.ModuleList([
-            MultiScalePyramidBranch(expert_config)
-            for _ in range(self.moe_params['num_experts'])
-        ])
-        
-        # 3. 确定输出维度
-        self.output_channels = self.experts[0].output_channels
-        self.output_len = self.experts[0].output_length
+        gate_config = config['attention_gate_config']
+        gate_config['fft_len'] = config['fft']['n_fft'] // 2 + 1
+        gate_config['attention_channels'] = main_branch_out_channels
+        self.attention_gate = AttentionGate(gate_config)
+
+        # 3. Define overall output shape
+        self.output_channels = self.main_branch.output_channels
+        self.output_length = self.main_branch.output_length
 
     def forward(self, x):
-        # --- 门控逻辑 (在频域) ---
-        with torch.no_grad():
-            x_fft_r = torch.stft(x, n_fft=self.fft_params['n_fft'], hop_length=self.fft_params['hop_length'], return_complex=False, window=torch.hann_window(self.fft_params['n_fft']).to(x.device))
-            x_fft_mag = torch.sqrt(x_fft_r[..., 0]**2 + x_fft_r[..., 1]**2)
+        # Main path
+        main_features = self.main_branch(x) # (B, C, L)
         
-        weights, indices = self.gating_network(x_fft_mag)
+        # Attention path
+        fft_features = self.feature_extractor(x)
+        channel_weights = self.attention_gate(fft_features) # (B, C)
         
-        # --- 稀疏专家处理 ---
-        batch_size = x.size(0)
-        # 从预存的元数据中获取输出形状
-        output_shape = (batch_size, self.output_channels, self.output_len)
-        final_output = torch.zeros(output_shape, device=x.device)
-
-        # 遍历批次中的每个样本
-        for i in range(batch_size):
-            # 获取当前样本的输入和其top-k专家的权重与索引
-            input_i = x[i].unsqueeze(0)
-            top_k_indices_i = indices[i]
-            top_k_weights_i = weights[i]
-
-            # 只对选中的专家进行计算并加权求和
-            for j in range(self.moe_params['k']):
-                expert_idx = top_k_indices_i[j]
-                weight = top_k_weights_i[j]
-                expert = self.experts[expert_idx]
-                final_output[i] += weight * expert(input_i).squeeze(0)
-                
-        return final_output
+        # Apply attention
+        output = main_features * channel_weights.unsqueeze(-1)
+        
+        return output

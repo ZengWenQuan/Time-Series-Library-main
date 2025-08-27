@@ -45,7 +45,4 @@ class LineAttentionBranch(nn.Module):
         self.output_dim = in_channels
 
     def forward(self, x):
-        # 修正输入维度: [B, L, 1] -> [B, L] -> [B, 1, L]
-        if x.ndim == 3 and x.shape[2] == 1:
-            x = x.squeeze(-1)
         return self.pyramid(x.unsqueeze(1))

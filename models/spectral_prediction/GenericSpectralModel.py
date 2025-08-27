@@ -23,6 +23,7 @@ class GenericSpectralModel(nn.Module):
         
         with open(configs.model_conf, 'r') as f:
             model_config = yaml.safe_load(f)
+        self.model_config = model_config # Save config for profiling
 
         # --- 新增：获取全局设置并向下传递 ---
         global_settings = model_config.get('global_settings', {})
@@ -64,24 +65,55 @@ class GenericSpectralModel(nn.Module):
         head_config['targets'] = self.targets
         self.prediction_head = HeadClass(head_config)
 
-                # --- FLOPs and Parameters Calculation ---
-        if hasattr(configs, 'sample_batch') and configs.sample_batch is not None:
-            try:
-                from thop import profile
-                self.eval()
-                with torch.no_grad():
-                    macs, params = profile(self, inputs=(configs.sample_batch.to('cpu'),), verbose=False)
-                self.train()
+
+    def profile_model(self, sample_batch):
+        """
+        Calculates and returns the FLOPs and parameters for each submodule.
+        """
+        from thop import profile
+        stats = {}
+        device = sample_batch.device
+        
+        # --- 模仿 forward pass 来获取各部分的输入 ---
+        if self.task_name == 'regression':
+            x = sample_batch
+            # 1. Normalized Branch
+            macs, params = profile(self.normalized_branch, inputs=(x,), verbose=False)
+            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
+            features = self.normalized_branch(x)
+
+            # 2. Prediction Head
+            macs, params = profile(self.prediction_head, inputs=(features,), verbose=False)
+            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+
+        elif self.task_name == 'spectral_prediction':
+            # 处理两种可能的输入格式
+            x=sample_batch
+            if x.dim() == 3 and x.shape[-1] == 2:
+                 x_continuum, x_normalized = x[:, :, 0].unsqueeze(1), x[:, :, 1].unsqueeze(1)
+            elif x.dim()==2 and x.shape[-1]==2:
+                x_continuum, x_normalized = x[:, 0].unsqueeze(1), x[:, 1].unsqueeze(1)
+            # 1. Normalized Branch
+            macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
+            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
+            features_norm = self.normalized_branch(x_normalized)
+
+            # 2. Continuum Branch
+            macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
+            stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
+            features_cont = self.continuum_branch(x_continuum)
+
+            # 3. Fusion Layer
+            macs, params = profile(self.fusion, inputs=(features_norm, features_cont), verbose=False)
+            stats['fusion'] = {'flops': macs * 2, 'params': params}
+            fused_sequence = self.fusion(features_norm, features_cont)
+
+            # 4. Prediction Head
+            macs, params = profile(self.prediction_head, inputs=(fused_sequence,), verbose=False)
+            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+        
+        return stats
                 
-                self.flops = macs * 2
-                self.params = params
-                print(f"FLOPs and Parameters calculated: {self.flops / 1e9:.2f} GFLOPs, {self.params / 1e6:.2f} M Params")
-            except ImportError:
-                print("Warning: `thop` library not installed. Skipping FLOPs calculation. Run `pip install thop`.")
-                self.flops = 0
-                self.params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-            except Exception as e:
-                print(f"Warning: FLOPs calculation failed. Error: {e}")
 
     def forward(self, x, x_normalized=None):
         # --- 模仿 CustomFusionNet 的前向传播逻辑 ---
@@ -89,10 +121,11 @@ class GenericSpectralModel(nn.Module):
             return self.forward_regression(x)
         elif self.task_name == 'spectral_prediction':
             # 处理两种可能的输入格式
-            if x_normalized is None and x.shape[-1] == 2:
-                 x_continuum, x_normalized = x[:, :, 0], x[:, :, 1]
-            else:
-                 x_continuum = x
+            if x.dim() == 3 and x.shape[-1] == 2:
+                 x_continuum, x_normalized = x[:, :, 0].unsqueeze(1), x[:, :, 1].unsqueeze(1)
+            elif x.dim()==2 and x.shape[-1]==2:
+                x_continuum, x_normalized = x[:, 0].unsqueeze(1), x[:, 1].unsqueeze(1)
+
             return self.forward_spectral_prediction(x_continuum, x_normalized)
         else:
             raise ValueError(f"未知的任务类型: {self.task_name}")
@@ -108,3 +141,5 @@ class GenericSpectralModel(nn.Module):
         # 将 (B, C, L) 特征直接传递给预测头，
         # 由预测头自己决定如何处理输入。
         return self.prediction_head(features)
+
+    

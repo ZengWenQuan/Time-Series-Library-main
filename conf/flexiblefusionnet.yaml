@@ -23,7 +23,7 @@ training_settings:
   mixed_precision: True
 
 # --- 分支与头模块选择 ---
-continuum_branch_name: 'CustomMoEBranch'
+continuum_branch_name: 'CustomAttentiveBranch'
 normalized_branch_name: 'MultiScalePyramidBranch'
 fusion_name: 'FusionModule'
 head_name: 'MultiTaskHead'
@@ -32,20 +32,21 @@ head_name: 'MultiTaskHead'
 continuum_branch_config:
   fft:
     n_fft: 128
-    hop_length: 16
-  moe:
-    num_experts: 4
-    k: 2
-    gating_hidden_dims: [1024, 256 , 64] # 使用列表定义更深的门控网络
-  input_len: *branch_l
-  expert_config:
+  # 主干网络配置 (替换旧的 expert_config)
+  main_branch_config:
     in_channels: 1
     input_len: *branch_l
-    
     pyramid_layers:
       - {out_channels: 16, kernel_sizes: [3, 5], pool_size: 2}
-      - {out_channels: 32, kernel_sizes: [3, 5], pool_size: 2}
+      - {out_channels: 8, kernel_sizes: [3, 5,7], pool_size: 2}
       - {out_channels: *branch_c, kernel_sizes: [3, 5], pool_size: 2}
+  # 注意力门控配置 (替换旧的 moe config)
+  attention_gate_config:
+    gating_conv_layers:
+      - {out_channels: 16, kernel_size: 5, pool_size: 2}
+      - {out_channels: 32, kernel_size: 3, pool_size: 2}
+    gating_hidden_dims: [64, 32]
+  input_len: *branch_l
 
 # 3. 归一化谱分支配置 (MultiScalePyramidBranch)
 normalized_branch_config:
@@ -71,7 +72,7 @@ head_config:
   in_channels: *fusion_c
   in_len: *fusion_l
   self_attention:
-    heads: 32
+    heads: 4
   conv_pyramid:
     layers:
       - {out_channels: 32, kernel_size: 3, pool_size: 2}

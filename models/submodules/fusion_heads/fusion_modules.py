@@ -61,9 +61,8 @@ class FusionModule(nn.Module):
         elif self.strategy == 'concat':
             # After adjustment, both branches have `target_channels`
             concatenated_channels = target_channels * 2
-            fusion_out_channels = config.get('out_channels', concatenated_channels)
-            self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=fusion_out_channels, kernel_size=1)
-            self.output_dim = fusion_out_channels
+            self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=concatenated_channels/2, kernel_size=1)
+            self.output_dim = concatenated_channels/2
         
         elif self.strategy == 'add':
             self.output_dim = target_channels

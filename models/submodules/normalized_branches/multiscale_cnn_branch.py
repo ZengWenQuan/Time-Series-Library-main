@@ -63,7 +63,6 @@ class AbsorptionBranch(nn.Module):
         self.output_dim = in_channels
         
     def forward(self, x):
-        x = x.unsqueeze(1)
         for block in self.multiscale_blocks: x = block(x)
         x = self.global_pool(x).squeeze(-1)
         return x

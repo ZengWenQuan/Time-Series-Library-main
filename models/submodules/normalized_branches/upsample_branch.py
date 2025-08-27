@@ -69,7 +69,6 @@ class UpsampleMultiScaleBranch(nn.Module):
         self.output_dim = in_ch
 
     def forward(self, x):
-        x = x.unsqueeze(1)
         x = F.relu(self.upsample_conv(x))
         for block in self.pyramid_blocks:
             x = block(x)
