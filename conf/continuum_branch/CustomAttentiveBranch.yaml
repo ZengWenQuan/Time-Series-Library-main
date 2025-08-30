@@ -1,0 +1,18 @@
+# Config for CustomAttentiveBranch
+fft:
+  n_fft: 128
+# 主干网络配置 (替换旧的 expert_config)
+main_branch_config:
+  in_channels: 1
+  input_len: 4800
+  pyramid_layers:
+    - {out_channels: 128, kernel_sizes: [3, 5,7], pool_size: 2}
+    - {out_channels: 64, kernel_sizes:  [3, 5,7], pool_size: 2}
+    - {out_channels: 16, kernel_sizes: [3, 5,7], pool_size: 2}
+# 注意力门控配置 (替换旧的 moe config)
+attention_gate_config:
+  gating_conv_layers:
+    - {out_channels: 64, kernel_size: 5, pool_size: 2}
+    - {out_channels: 16, kernel_size: 3, pool_size: 2}
+  gating_hidden_dims: [128, 128]
+input_len: 4800

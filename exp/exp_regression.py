@@ -1,6 +1,5 @@
 import os
 import yaml
-from torch import optim
 from exp.exp_basic import Exp_Basic
 from data_provider.data_factory import data_provider
 from utils.scaler import Scaler

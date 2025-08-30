@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 from ...registries import register_head
+from .fusion_modules import FeatureAdjuster
 
 @register_head
 class MultiTaskHead(nn.Module):
     """
-    多任务预测头 (v7)。
-    在卷积主干前增加自注意力模块。
+    多任务预测头 (v9)。
+    从外部引入 FeatureAdjuster，在模块入口处自动调整输入特征的维度。
     """
     def __init__(self, config):
         super(MultiTaskHead, self).__init__()
@@ -16,7 +17,10 @@ class MultiTaskHead(nn.Module):
         in_channels = config['in_channels']
         in_len = config['in_len']
 
-        # --- 1. 新增：自注意力模块 ---
+        # --- 0. 入口特征调整器 ---
+        self.adjuster = FeatureAdjuster(out_channels=in_channels, out_len=in_len)
+
+        # --- 1. 自注意力模块 ---
         attention_heads = config.get('self_attention_heads', 4)
         self.attention_norm = nn.LayerNorm(in_channels)
         self.attention = nn.MultiheadAttention(
@@ -72,15 +76,18 @@ class MultiTaskHead(nn.Module):
             self.heads[target_name] = nn.Sequential(*layers)
 
     def forward(self, x):
-        # x 的输入形状是 (B, C, L)
+        # x 的输入形状是 (B, C_in, L_in)
+        
+        # 0. 自动调整输入维度
+        x = self.adjuster(x) # 输出形状 (B, in_channels, in_len)
         
         # 1. 自注意力模块
-        x_permuted = x.permute(0, 2, 1) # (B, L, C)
+        x_permuted = x.permute(0, 2, 1) # (B, in_len, in_channels)
         x_norm = self.attention_norm(x_permuted)
         attn_output, _ = self.attention(x_norm, x_norm, x_norm)
         # 残差连接
         x = x_permuted + attn_output
-        x = x.permute(0, 2, 1) # 转换回 (B, C, L)
+        x = x.permute(0, 2, 1) # 转换回 (B, in_channels, in_len)
         
         # 2. 通过共享卷积主干
         x = self.shared_backbone(x)

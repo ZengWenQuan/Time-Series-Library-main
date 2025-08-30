@@ -1,0 +1,6 @@
+input_len: 3834
+pyramid_channels: [8, 8, 16]
+kernel_sizes: [3, 5, 7]
+pool_size: 2
+use_attention: true
+attention_reduction: 4

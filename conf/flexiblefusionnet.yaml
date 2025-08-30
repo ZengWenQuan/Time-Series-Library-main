@@ -1,6 +1,6 @@
-# FlexibleFusionNet 配置文件
+# FlexibleFusionNet 配置文件 (模块化)
 
-# --- 新增：定义可复用的锚点 ---
+# --- 可复用的锚点 ---
 anchor_vars:
   branch_out_channels: &branch_c 16
   branch_in_len: &branch_l 4800
@@ -14,68 +14,9 @@ global_settings:
   use_batch_norm: &use_bn True
   dropout_rate: &dropout_p 0.1
 
-# 1. 训练设置 (遵循项目现有格式)
-training_settings:
-  targets: ['Teff', 'logg', 'FeH', 'CFe']
-  loss_function: 'mse'
-  loss_weights: [1.0, 1.0, 1.0, 1.0]
-  lradj: 'cos'
-  mixed_precision: True
-
-# --- 分支与头模块选择 ---
+# --- 训练、分支与头模块选择 ---
+training_name: 'mse_cos' # 新增：指向训练配置文件
 continuum_branch_name: 'CustomAttentiveBranch'
 normalized_branch_name: 'MultiScalePyramidBranch'
-fusion_name: 'FusionModule'
+fusion_name: 'add'
 head_name: 'MultiTaskHead'
-
-# 2. 连续谱分支配置 (CustomMoEBranch)
-continuum_branch_config:
-  fft:
-    n_fft: 128
-  # 主干网络配置 (替换旧的 expert_config)
-  main_branch_config:
-    in_channels: 1
-    input_len: *branch_l
-    pyramid_layers:
-      - {out_channels: 16, kernel_sizes: [3, 5], pool_size: 2}
-      - {out_channels: 8, kernel_sizes: [3, 5,7], pool_size: 2}
-      - {out_channels: *branch_c, kernel_sizes: [3, 5], pool_size: 2}
-  # 注意力门控配置 (替换旧的 moe config)
-  attention_gate_config:
-    gating_conv_layers:
-      - {out_channels: 16, kernel_size: 5, pool_size: 2}
-      - {out_channels: 32, kernel_size: 3, pool_size: 2}
-    gating_hidden_dims: [64, 32]
-  input_len: *branch_l
-
-# 3. 归一化谱分支配置 (MultiScalePyramidBranch)
-normalized_branch_config:
-  in_channels: 1
-  input_len: *branch_l
-  
-  pyramid_layers:
-    - {out_channels: 128, kernel_sizes: [3, 5, 7], pool_size: 2}
-    - {out_channels: 64, kernel_sizes: [3, 5, 7], pool_size: 2}
-    - {out_channels: 32, kernel_sizes: [3, 5, 7], pool_size: 2}
-    - {out_channels: *branch_c, kernel_sizes: [3, 5, 7], pool_size: 2}
-
-# 4. 融合模块配置
-fusion_config:
-  strategy: 'cross-attention'
-  # 新增：定义融合前的目标形状
-  target_shape:
-    channels: *fusion_c
-    length: *fusion_l
-
-# 5. 预测头配置 (MultiTaskHead)
-head_config:
-  in_channels: *fusion_c
-  in_len: *fusion_l
-  self_attention:
-    heads: 4
-  conv_pyramid:
-    layers:
-      - {out_channels: 32, kernel_size: 3, pool_size: 2}
-      - {out_channels: 16, kernel_size: 3, pool_size: 2}
-  ffn_layers: [512,128, 32]
-  dropout: *dropout_p

@@ -12,6 +12,7 @@ mlruns/
 build/
 .claude/
 no_trace/
+APjs/
 .vscode/
 gemini_context/
 latex/

@@ -2,7 +2,7 @@
 
 # --- 新增：定义可复用的锚点 ---
 anchor_vars:
-  input_len: &input_l 3834 # 假设输入长度，需要根据实际数据调整
+  input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整
   fusion_channels: &fusion_c 16
   fusion_len: &fusion_l 128 # 假设融合后的目标长度
 
@@ -11,53 +11,9 @@ global_settings:
   use_batch_norm: &use_bn True
   dropout_rate: &dropout_p 0.1
 
-# 1. 训练设置
-training_settings:
-  targets: ['Teff', 'logg', 'FeH', 'CFe']
-  loss_function: 'mse'
-  loss_weights: [1.0, 1.0, 1.0, 1.0]
-  lradj: 'cos'
-  mixed_precision: True
-
-# --- 分支与头模块选择 ---
+# --- 训练、分支与头模块选择 ---
+training_name: 'mse_cos' # 复用已有的训练配置
 normalized_branch_name: 'NormalizedSpectrumBranch' 
 continuum_branch_name: 'ContinuumWaveletBranch'
-fusion_name: 'FusionModule'
-head_name: 'MultiTaskHead'
-
-# --- 分支参数配置 ---
-normalized_branch_config:
-  input_len: *input_l
-  pyramid_channels: [8, 8, 16]
-  kernel_sizes: [3, 5, 7]
-  pool_size: 2
-  use_attention: true # 本地开关
-  attention_reduction: 4 # 本地设置
-
-continuum_branch_config:
-  input_len: *input_l
-  wavelet_name: 'db4'
-  wavelet_levels: 2
-  cnn:
-    layers:
-      - {out_channels_per_path: 16, pool_size: 2}
-      - {out_channels_per_path: 16, pool_size: 2}
-
-# --- 融合模块参数配置 ---
-fusion_config:
-  strategy: 'cross-attention'
-  target_shape:
-    channels: *fusion_c
-    length: *fusion_l
-
-# --- 预测头配置 ---
-head_config:
-  in_channels: *fusion_c
-  in_len: *fusion_l
-  self_attention:
-    heads: 4
-  conv_pyramid:
-    layers:
-      - {out_channels: 16, kernel_size: 3, pool_size: 2}
-      - {out_channels: 8, kernel_size: 3, pool_size: 2}
-  ffn_layers: [512, 128, 32]
+fusion_name: 'add' # 复用已有的融合模块配置
+head_name: 'LstmFfnHead' # 复用已有的预测头配置

@@ -1,0 +1,11 @@
+# Config for MultiTaskHead
+in_channels: 32
+in_len: 128
+self_attention:
+  heads: 4
+conv_pyramid:
+  layers:
+    - {out_channels: 32, kernel_size: 3, pool_size: 2}
+    - {out_channels: 16, kernel_size: 3, pool_size: 2}
+ffn_layers: [512, 128, 32]
+dropout: 0.1

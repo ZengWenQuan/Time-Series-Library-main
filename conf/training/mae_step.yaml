@@ -1,0 +1,6 @@
+# mae_step.yaml: 使用MAE损失和StepLR调度器
+targets: ['Teff', 'logg', 'FeH', 'CFe']
+loss_function: 'mae'
+loss_weights: [1.0, 1.0, 1.0, 1.0]
+lradj: 'step'
+mixed_precision: True

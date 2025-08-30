@@ -1,0 +1,6 @@
+# Training settings: MSE loss and Cosine LR scheduler
+targets: ['Teff', 'logg', 'FeH', 'CFe']
+loss_function: 'mse'
+loss_weights: [1.0, 1.0, 1.0, 1.0]
+lradj: 'cos'
+mixed_precision: True

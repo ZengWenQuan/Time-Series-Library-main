@@ -1,0 +1,7 @@
+input_len: 4800
+wavelet_name: 'db4'
+wavelet_levels: 2
+cnn:
+  layers:
+    - {out_channels_per_path: 128, pool_size: 2}
+    - {out_channels_per_path: 64, pool_size: 2}

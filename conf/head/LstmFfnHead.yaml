@@ -1,0 +1,18 @@
+# LstmFfnHead.yaml: 使用LSTM和FFN的预测头配置
+
+# --- 必需参数 ---
+# in_channels 和 in_len 定义了模块内部期望的维度
+# FeatureAdjuster 会自动将输入调整到这个维度
+in_channels: 32
+in_len: 128
+
+# --- LSTM 特定参数 ---
+lstm_hidden_size: 128
+lstm_layers: 2
+lstm_bidirectional: True # 新增：控制是否使用双向LSTM
+
+# --- FFN 特定参数 ---
+ffn_layers: [256, 128]
+
+# --- 通用参数 ---
+dropout_rate: 0.2

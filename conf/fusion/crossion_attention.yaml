@@ -1,0 +1,6 @@
+# crossion_attention.yaml: 交叉注意力融合的配置
+strategy: 'cross-attention' # 策略名，仅供参考，实际由模块决定
+attention_heads: 4
+target_shape:
+  channels: 64
+  length: 128

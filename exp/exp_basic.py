@@ -51,32 +51,45 @@ class Exp_Basic(object):
         self.device = self._acquire_device()
         self._setup_logger()
 
-        # --- 从 model_conf.yaml 加载设置 ---
+        # --- Load, merge, and re-save model configurations ---
         if not hasattr(self.args, 'model_conf') or not self.args.model_conf or not os.path.exists(self.args.model_conf):
-            raise FileNotFoundError(f"必须通过 --model_conf 提供一个有效的模型配置文件路径。")
+            raise FileNotFoundError("A valid model configuration file path must be provided via --model_conf.")
 
         try:
-            with open(self.args.model_conf, 'r') as f:
-                model_config = yaml.safe_load(f)
+            # 1. Load and merge all YAML files into one dictionary
+            model_config = self._load_and_merge_configs(self.args.model_conf)
+
+            # 2. Save the merged dictionary to a new temporary file inside the run directory
+            merged_config_path = os.path.join(self.args.run_dir, 'merged_model_conf.yaml')
+            with open(merged_config_path, 'w') as f:
+                yaml.dump(model_config, f, sort_keys=False, default_flow_style=False, indent=2)
+            
+            # 3. CRITICAL: Overwrite args.model_conf to point to the new, complete file
+            self.args.model_conf = merged_config_path
+            self.logger.info(f"Modular configs merged and saved to: {merged_config_path}")
+
+            # 4. Populate args with the full config for other potential uses
+            for key, value in model_config.items():
+                if not hasattr(self.args, key):
+                    setattr(self.args, key, value)
+
+            # 5. Continue with setup using the merged config
             training_settings = model_config.get('training_settings', {})
             
-            # --- 强制从 YAML 文件中获取 'targets' ---
             if 'targets' in training_settings:
-                # PyYAML 会自动将 yaml 列表转为 python 列表
                 self.targets = training_settings['targets']
-                self.args.targets = self.targets  # 保持 args 对象同步
+                self.args.targets = self.targets
             else:
-                raise ValueError(f"配置文件 {self.args.model_conf} 的 'training_settings' 中必须提供 'targets' 键。")
+                raise ValueError(f"The 'targets' key must be provided in the training_settings.")
 
-            # --- 加载其他设置（如果不存在则使用默认值） ---
-            self.args.loss = training_settings.get('loss_function', 'mae')
+            self.args.loss = training_settings.get('loss_function', 'mse')
             self.args.lradj = training_settings.get('lradj', 'cos')
-            self.args.loss_weights = training_settings.get('loss_weights', [1,1,1,1])
+            self.args.loss_weights = training_settings.get('loss_weights', [1.0, 1.0, 1.0, 1.0])
             self.args.use_amp = training_settings.get('mixed_precision', True)
 
         except Exception as e:
-            self.logger.error(f"处理模型配置文件 '{self.args.model_conf}' 时出错: {e}")
-            raise  # 重新抛出异常，中断程序
+            self.logger.error(f"Error processing model configuration '{self.args.model_conf}': {e}")
+            raise
 
         # --- ADDED: Initialize GradScaler for AMP ---
         self.scaler = None
@@ -91,6 +104,40 @@ class Exp_Basic(object):
         if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
             self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
             self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
+
+    def _load_and_merge_configs(self, main_config_path):
+        """
+        Loads the main YAML config and dynamically merges sub-configs based on module names.
+        """
+        self.logger.info(f"Loading main configuration from: {main_config_path}")
+        with open(main_config_path, 'r') as f:
+            main_config = yaml.safe_load(f)
+
+        # Define the mapping from the name in the main config to the subdirectory and the final key
+        module_mapping = {
+            'training_name': ('training', 'training_settings'),
+            'continuum_branch_name': ('continuum_branch', 'continuum_branch_config'),
+            'normalized_branch_name': ('normalized_branch', 'normalized_branch_config'),
+            'fusion_name': ('fusion', 'fusion_config'),
+            'head_name': ('head', 'head_config'),
+        }
+
+        for name_key, (subdir, config_key) in module_mapping.items():
+            if name_key in main_config:
+                module_name = main_config[name_key]
+                base_conf_dir = os.path.dirname(main_config_path)
+                sub_config_path = os.path.join(base_conf_dir, subdir, f"{module_name}.yaml")
+                
+                if not os.path.exists(sub_config_path):
+                    raise FileNotFoundError(f"Sub-configuration file not found: {sub_config_path}")
+                
+                self.logger.info(f"Loading sub-config for '{config_key}' from: {sub_config_path}")
+                with open(sub_config_path, 'r') as f:
+                    sub_config = yaml.safe_load(f)
+                
+                main_config[config_key] = sub_config
+        
+        return main_config
 
     def _build_train_transforms(self):
         """从配置文件加载增强配置，创建流水线并直接附加到args。"""
