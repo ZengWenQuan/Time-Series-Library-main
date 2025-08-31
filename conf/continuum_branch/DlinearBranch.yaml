@@ -1,0 +1,8 @@
+# DlinearBranch.yaml: 使用DLinear作为连续谱分支的配置
+
+# DLinear模型参数
+individual: false # 是否为每个通道使用独立的线性层，对于光谱应为False
+moving_avg: 25 # 趋势分解中使用的移动平均窗口大小
+
+# DLinear分支输出的特征长度，需要与融合模块的期望输入匹配
+output_len: 128 

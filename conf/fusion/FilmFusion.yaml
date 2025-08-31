@@ -1,0 +1,5 @@
+target_shape:
+  channels: 128
+  length: 128
+controller_branch: 'continuum'
+ffn_dims: [128, 256]

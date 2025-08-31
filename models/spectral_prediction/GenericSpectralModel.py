@@ -36,26 +36,19 @@ class GenericSpectralModel(nn.Module):
         NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
         self.normalized_branch = NormBranchClass(norm_branch_config)
         
-        # 2. 根据任务类型，选择性地初始化其他模块
-        if self.task_name == 'spectral_prediction':
-            cont_branch_config = model_config['continuum_branch_config']
-            cont_branch_config.update(global_settings)
-            ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-            self.continuum_branch = ContBranchClass(cont_branch_config)
-            
-            fusion_config = model_config['fusion_config']
-            fusion_config.update(global_settings)
-            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
-            fusion_config['channels_norm'] = self.normalized_branch.output_channels
-            fusion_config['channels_cont'] = self.continuum_branch.output_channels
-            self.fusion = FusionClass(fusion_config)
-            head_input_dim = self.fusion.output_dim
+        # 2. 初始化所有分支和融合模块
+        cont_branch_config = model_config['continuum_branch_config']
+        cont_branch_config.update(global_settings)
+        ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
+        self.continuum_branch = ContBranchClass(cont_branch_config)
         
-        elif self.task_name == 'regression':
-            head_input_dim = self.normalized_branch.output_dim
-        
-        else:
-            raise ValueError(f"未知的任务类型: {self.task_name}")
+        fusion_config = model_config['fusion_config']
+        fusion_config.update(global_settings)
+        FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
+        fusion_config['channels_norm'] = self.normalized_branch.output_channels
+        fusion_config['channels_cont'] = self.continuum_branch.output_channels
+        self.fusion = FusionClass(fusion_config)
+        head_input_dim = self.fusion.output_dim
 
         # 3. 初始化预测头模块
         head_config = model_config['head_config']
@@ -76,41 +69,34 @@ class GenericSpectralModel(nn.Module):
         
         # --- 模仿 forward pass 来获取各部分的输入 ---
         if self.task_name == 'regression':
-            x = sample_batch
-            # 1. Normalized Branch
-            macs, params = profile(self.normalized_branch, inputs=(x,), verbose=False)
-            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
-            features = self.normalized_branch(x)
-
-            # 2. Prediction Head
-            macs, params = profile(self.prediction_head, inputs=(features,), verbose=False)
-            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+            x_continuum, x_normalized = sample_batch, sample_batch
 
         elif self.task_name == 'spectral_prediction':
-            # 处理两种可能的输入格式
             x=sample_batch
             if x.dim() == 3 and x.shape[-1] == 2:
                  x_continuum, x_normalized = x[:, :, 0].unsqueeze(1), x[:, :, 1].unsqueeze(1)
             elif x.dim()==2 and x.shape[-1]==2:
                 x_continuum, x_normalized = x[:, 0].unsqueeze(1), x[:, 1].unsqueeze(1)
-            # 1. Normalized Branch
-            macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
-            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
-            features_norm = self.normalized_branch(x_normalized)
+        
+        # 对两种任务统一进行性能分析
+        # 1. Normalized Branch
+        macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
+        stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
+        features_norm = self.normalized_branch(x_normalized)
 
-            # 2. Continuum Branch
-            macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
-            stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
-            features_cont = self.continuum_branch(x_continuum)
+        # 2. Continuum Branch
+        macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
+        stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
+        features_cont = self.continuum_branch(x_continuum)
 
-            # 3. Fusion Layer
-            macs, params = profile(self.fusion, inputs=(features_norm, features_cont), verbose=False)
-            stats['fusion'] = {'flops': macs * 2, 'params': params}
-            fused_sequence = self.fusion(features_norm, features_cont)
+        # 3. Fusion Layer
+        macs, params = profile(self.fusion, inputs=(features_norm, features_cont), verbose=False)
+        stats['fusion'] = {'flops': macs * 2, 'params': params}
+        fused_sequence = self.fusion(features_norm, features_cont)
 
-            # 4. Prediction Head
-            macs, params = profile(self.prediction_head, inputs=(fused_sequence,), verbose=False)
-            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+        # 4. Prediction Head
+        macs, params = profile(self.prediction_head, inputs=(fused_sequence,), verbose=False)
+        stats['prediction_head'] = {'flops': macs * 2, 'params': params}
         
         return stats
                 
@@ -137,9 +123,12 @@ class GenericSpectralModel(nn.Module):
         return self.prediction_head(fused_sequence)
 
     def forward_regression(self, x):
-        features = self.normalized_branch(x)
-        # 将 (B, C, L) 特征直接传递给预测头，
-        # 由预测头自己决定如何处理输入。
-        return self.prediction_head(features)
+        # 将单个输入序列传递给两个分支
+        features_norm = self.normalized_branch(x)
+        features_cont = self.continuum_branch(x)
+        
+        # 融合特征并进行预测
+        fused_sequence = self.fusion(features_norm, features_cont)
+        return self.prediction_head(fused_sequence)
 
     

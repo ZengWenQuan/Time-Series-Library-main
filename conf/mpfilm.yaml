@@ -1,0 +1,33 @@
+# ==============================================================================
+# 主模型配置文件: MPFiLM (Micn-PatchTST-FiLM)
+# ==============================================================================
+
+# --- 1. 主模型名称 ---
+# 必须与 `models/registries.py` 中注册的名称完全一致
+model: MPFiLM
+
+# --- 2. 模块选择 ---
+# 指定每个部分要使用的模块名称。程序将根据这些名称
+# 自动从 `conf` 下的对应子目录加载模块的详细配置文件。
+
+# 训练设置模块
+training_name: mse_cos
+
+# 连续谱分支模块
+continuum_branch_name: MicnBranch
+
+# 归一化谱分支模块
+normalized_branch_name: PatchTstBranch
+
+# 融合模块
+fusion_name: FilmFusion
+
+# 预测头模块
+head_name: GlobalProjectionHead
+
+# --- 3. 全局设置 (可选) ---
+# 这里的参数将被传递给所有子模块的配置中，用于覆盖或提供通用设置。
+# 这对于需要共享相同参数（如 input_len, d_model）的模块非常有用。
+global_settings:
+  input_len: 3721
+  # d_model: 128 # 可以在这里统一设置，但各分支可能需要不同维度，因此在各自配置中定义

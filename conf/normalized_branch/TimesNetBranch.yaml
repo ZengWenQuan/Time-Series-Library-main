@@ -1,0 +1,13 @@
+# TimesNetBranch.yaml: 使用TimesNet作为归一化分支的配置
+
+# TimesNet模型参数
+top_k: 5
+e_layers: 2
+d_model: 64
+d_ff: 64
+
+# Inception块参数
+num_kernels: 6
+
+# 通用模块参数
+dropout: 0.1

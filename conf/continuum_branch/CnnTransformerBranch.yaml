@@ -1,0 +1,11 @@
+cnn:
+  layers:
+    - {out_channels: 32, kernel_size: 5, stride: 2, padding: 2}
+    - {out_channels: 64, kernel_size: 3, stride: 2, padding: 1}
+transformer:
+  d_model: 64
+  n_heads: 8
+  ffn_dim: 256
+  dropout: 0.1
+  num_layers: 2
+dropout_rate: 0.1

@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,5 +26,29 @@ class FlexibleFusionNet(GenericSpectralModel):
     A flexible fusion network that inherits all functionality directly from
     GenericSpectralModel. It is registered under its own name to allow for
     separate configuration and tracking, while reusing the generic model logic.
+    """
+    pass
+
+@register_model
+class MPFiLM(GenericSpectralModel):
+    """
+    MPFiLM (Micn-PatchTST-FiLM) model.
+    Inherits all functionality from GenericSpectralModel.
+    - Continuum Branch: MicnBranch
+    - Normalized Branch: PatchTstBranch
+    - Fusion: FilmFusion
+    - Head: GlobalProjectionHead
+    """
+    pass
+
+@register_model
+class HybridFormer(GenericSpectralModel):
+    """
+    HybridFormer (CNN-Transformer + PatchTST) model.
+    Inherits all functionality from GenericSpectralModel.
+    - Continuum Branch: CnnTransformerBranch
+    - Normalized Branch: PatchTstBranch
+    - Fusion: GruFusion
+    - Head: DecoderHead
     """
     pass

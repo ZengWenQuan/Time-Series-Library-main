@@ -1,0 +1,17 @@
+# ==============================================================================
+# 主模型配置文件: HybridFormer
+# ==============================================================================
+
+# --- 1. 主模型名称 ---
+model: HybridFormer
+
+# --- 2. 模块选择 ---
+training_name: mse_cos
+continuum_branch_name: CnnTransformerBranch
+normalized_branch_name: PatchTstBranch
+fusion_name: GruFusion
+head_name: DecoderHead
+
+# --- 3. 全局设置 (可选) ---
+global_settings:
+  input_len: 3721
