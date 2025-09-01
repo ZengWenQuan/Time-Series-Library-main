@@ -21,7 +21,7 @@ def calculate_statistics(series):
 def main():
     """Main function to update stats.yaml from training data for fixed targets."""
     parser = argparse.ArgumentParser(description="Update stats.yaml with statistics from the training set.")
-    parser.add_argument('--train_dir', type=str, default='dataset/split_data/train', help="Path to the training data directory.")
+    parser.add_argument('--train_dir', type=str, default='dataset/split_data_16293_1336_4800len_nonoised/train', help="Path to the training data directory.")
     parser.add_argument('--stats_path', type=str, default='conf/stats.yaml', help="Path to the stats.yaml file to update.")
     args = parser.parse_args()
 

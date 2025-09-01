@@ -16,4 +16,5 @@ training_name: 'mse_cos' # 复用已有的训练配置
 normalized_branch_name: 'NormalizedSpectrumBranch' 
 continuum_branch_name: 'ContinuumWaveletBranch'
 fusion_name: 'add' # 复用已有的融合模块配置
-head_name: 'LstmFfnHead' # 复用已有的预测头配置
+#head_name: 'LstmFfnHead' # 复用已有的预测头配置
+head_name: 'MultiTaskHead'
