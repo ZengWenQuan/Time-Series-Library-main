@@ -8,7 +8,8 @@ anchor_vars:
 
 # --- 新增：全局模型设置 ---
 global_settings:
-  use_batch_norm: &use_bn True
+  input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整
+  use_batch_norm: &use_bn false
   dropout_rate: &dropout_p 0.1
 
 # --- 训练、分支与头模块选择 ---
@@ -16,4 +17,4 @@ training_name: 'mse_cos' # 复用已有的训练配置
 normalized_branch_name: 'NormalizedSpectrumBranch' 
 continuum_branch_name: 'ContinuumWaveletBranch'
 fusion_name: 'add' # 复用已有的融合模块配置
-head_name: 'LstmFfnHead' # 复用已有的预测头配置
+head_name: 'MultiTaskHead' # 复用已有的预测头配置

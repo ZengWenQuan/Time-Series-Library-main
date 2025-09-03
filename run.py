@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size of train input data')
     parser.add_argument('--patience', type=int, default=15, help='Early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.0001, help='Optimizer learning rate')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay (L2 penalty)')
+    parser.add_argument('--weight_decay', type=float, default=0.0, help='Weight decay (L2 penalty)')
     parser.add_argument('--max_grad_norm', type=float, default=20.0, help='Max norm of the gradients for clipping')
     parser.add_argument('--vali_interval', type=int, default=1, help='Validate every N epochs')
     parser.add_argument('--checkpoints', type=str, default=None, help='Path to a checkpoint to resume training from')

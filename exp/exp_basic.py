@@ -258,10 +258,10 @@ class Exp_Basic(object):
         # Instructions: Uncomment the optimizer you want to use.
         import torch.optim as optim
         # Option 1: Adam (Default)
-        # optimizer = optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
         
         # Option 2: AdamW
-        optimizer = optim.AdamW(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        # optimizer = optim.AdamW(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
         
         # Option 3: SGD with Momentum
         # momentum = getattr(self.args, 'momentum', 0.9) # You can set momentum in your YAML if needed
@@ -274,8 +274,8 @@ class Exp_Basic(object):
 
     def _select_scheduler(self, optimizer):
         if self.args.lradj == 'cos':
-            return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
-        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+            return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     def get_feature_scaler(self):
         raise NotImplementedError("Subclasses must implement get_feature_scaler()")
     def get_label_scaler(self):

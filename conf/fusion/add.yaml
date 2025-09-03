@@ -1,5 +1,5 @@
 # add.yaml: 逐元素相加融合的配置
 strategy: 'add' # 策略名，仅供参考，实际由模块决定
 target_shape:
-  channels: 32
-  length: 64
+  channels: 64
+  length: 512

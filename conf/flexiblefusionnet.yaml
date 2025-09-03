@@ -11,7 +11,8 @@ anchor_vars:
 
 # --- 新增：全局模型设置 ---
 global_settings:
-  use_batch_norm: &use_bn True
+  input_len: &input_l 4800
+  use_batch_norm: &use_bn false
   dropout_rate: &dropout_p 0.1
 
 # --- 训练、分支与头模块选择 ---
