@@ -25,6 +25,7 @@ class Transforms:
     """根据配置构建并执行一个数据增强流水线。"""
     def __init__(self, augs_conf):
         self.augmentations = []
+        self.aval_name = []
         if not augs_conf: # 如果配置为空，则不进行任何操作
             return
 
@@ -42,7 +43,7 @@ class Transforms:
                         p=aug_conf.get('p', 0.5)
                     )
                     self.augmentations.append(prob_transform)
-
+                    self.aval_name.append(aug_conf['name'])
     def __call__(self, x):
         for aug in self.augmentations:
             x = aug(x)

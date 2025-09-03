@@ -104,7 +104,7 @@ class Exp_Basic(object):
         if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
             self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
             self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
-
+        self._build_train_transforms()
     def _load_and_merge_configs(self, main_config_path):
         """
         Loads the main YAML config and dynamically merges sub-configs based on module names.
@@ -406,7 +406,6 @@ class Exp_Basic(object):
             if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
             log_msg += f" | Time: {formatted_cost_time} | ETA: {formatted_eta}"
-            self.logger.info(log_msg)
             
             # --- Log to MLflow ---
             if (epoch + 1) % self.args.vali_interval == 0:
@@ -442,6 +441,7 @@ class Exp_Basic(object):
             if scheduler is not None: scheduler.step() 
 
             save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir)
+            self.logger.info(log_msg)
         # mlflow.log_artifact(self.args.run_dir, artifact_path="results")
         # mlflow.end_run()
         return self.model

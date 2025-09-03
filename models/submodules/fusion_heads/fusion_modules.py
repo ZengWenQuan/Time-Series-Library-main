@@ -37,7 +37,7 @@ class add(nn.Module):
 
         self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
         self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
-        self.output_channels = target_channels # 遵循风格
+        self.output_channels = target_channels
         self.output_length = target_length
 
     def forward(self, features_norm, features_cont):
@@ -64,7 +64,7 @@ class concat(nn.Module):
         
         concatenated_channels = target_channels * 2
         self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=target_channels, kernel_size=1)
-        self.output_channels = target_channels # 遵循风格
+        self.output_channels = target_channels
         self.output_length = target_length
 
     def forward(self, features_norm, features_cont):

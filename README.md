@@ -95,7 +95,89 @@ chmod +x scripts/spectral_prediction/run_flexiblefusionnet.sh
 
 ## 🔧 自定义与扩展
 
-通过修改 `conf/` 目录下的YAML文件，或在 `models/submodules/` 目录下添加新的模块，您可以轻松地组合和测试新模型。
+本框架的核心优势在于其高度的可扩展性。你可以通过以下两种方式来构建、测试和验证你的新想法：
+
+### 1. 修改现有模型（无需编写代码）
+
+最简单的方式是修改 `conf/` 目录下的YAML配置文件。每个模型都由 `branch_continuum`、`branch_normalized`、`fusion` 和 `head` 四个核心部分组成。
+
+例如，要修改 `CustomFusionNet`，你可以打开 `conf/customfusionnet.yaml` 文件：
+
+```yaml
+# conf/customfusionnet.yaml
+model:
+  name: "CustomFusionNet"
+  branch_continuum:
+    name: "ContinuumWaveletBranch"  # <-- 更换连续谱分支
+    # ...
+  branch_normalized:
+    name: "NormalizedSpectrumBranch" # <-- 更换归一化谱分支
+    # ...
+  fusion:
+    name: "concat" # <-- 更换融合策略
+    # ...
+  head:
+    name: "DecoderHead" # <-- 更换预测头
+    # ...
+```
+
+你只需要将 `name` 字段的值更改为已注册的任何其他模块名称，即可轻松地“即插即用”，组合出全新的模型架构。所有可用的模块都定义在 `models/` 目录下。
+
+### 2. 添加新模块（需要编写代码）
+
+如果你有全新的模块设计，可以按照以下三个步骤将其集成到框架中：
+
+**步骤一：创建模块文件**
+在对应的子目录下创建一个新的Python文件。例如，要创建一个新的归一化谱分支：
+`models/spectral_prediction/branch/MyNewBranch.py`
+
+**步骤二：实现模块**
+在新文件中，编写你的PyTorch模块。
+
+```python
+# models/spectral_prediction/branch/MyNewBranch.py
+from torch import nn
+from models.registries import NORMALIZED_BRANCH_REGISTRY
+
+@NORMALIZED_BRANCH_REGISTRY.register()
+class MyNewBranch(nn.Module):
+    def __init__(self, configs):
+        super().__init__()
+        # ... 你的网络层定义 ...
+
+    def forward(self, x):
+        # ... 你的前向传播逻辑 ...
+        return x
+```
+
+**步骤三：注册模块**
+使用对应的注册器装饰器（Decorator）来注册你的新模块。关键在于 `@NORMALIZED_BRANCH_REGISTRY.register()` 这一行，它会自动将 `MyNewBranch` 添加到可用模块列表中。
+
+- **连续谱分支**: `@CONTINUUM_BRANCH_REGISTRY.register()`
+- **归一化谱分支**: `@NORMALIZED_BRANCH_REGISTRY.register()`
+- **融合模块**: `@FUSION_REGISTRY.register()`
+- **预测头**: `@HEAD_REGISTRY.register()`
+
+完成这三步后，你就可以在YAML配置文件中使用 `"MyNewBranch"` 了。
+
+### 3. 调整训练过程
+
+模型的训练过程同样通过YAML文件进行配置。在每个模型的配置文件中，都有一个 `training` 部分，你可以在这里调整超参数。
+
+```yaml
+# conf/customfusionnet.yaml
+training:
+  loss_function: "mse"       # 损失函数 (例如: "mse", "mae")
+  optimizer: "adam"          # 优化器
+  learning_rate: 0.001       # 学习率
+  weight_decay: 0.0001       # 权重衰减
+  scheduler: "cosine"        # 学习率调度器
+  epochs: 100                # 训练轮次
+  batch_size: 64             # 批处理大小
+```
+
+通过修改这些参数，你可以精细地控制模型的训练行为，以适应不同的实验需求。
+
 
 ## 📄 许可证
 

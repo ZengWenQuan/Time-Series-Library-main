@@ -14,8 +14,8 @@ class MultiTaskHead(nn.Module):
         self.targets = config['targets']
         use_batch_norm = config.get('use_batch_norm', True)
         dropout_rate = config.get('dropout_rate', 0.2)
-        in_channels = config['in_channels']
-        in_len = config['in_len']
+        in_channels = config['head_input_channels']
+        in_len = config['head_input_length']
 
         # --- 0. 入口特征调整器 ---
         self.adjuster = FeatureAdjuster(out_channels=in_channels, out_len=in_len)

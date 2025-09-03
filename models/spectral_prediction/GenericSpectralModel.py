@@ -47,14 +47,17 @@ class GenericSpectralModel(nn.Module):
         FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
         fusion_config['channels_norm'] = self.normalized_branch.output_channels
         fusion_config['channels_cont'] = self.continuum_branch.output_channels
+        fusion_config['len_norm'] = self.normalized_branch.output_length
+        fusion_config['len_cont'] = self.continuum_branch.output_length
         self.fusion = FusionClass(fusion_config)
-        head_input_dim = self.fusion.output_dim
+        head_input_channels = self.fusion.output_channels
 
         # 3. 初始化预测头模块
         head_config = model_config['head_config']
         head_config.update(global_settings)
         HeadClass = HEAD_REGISTRY[model_config['head_name']]
-        head_config['head_input_dim'] = head_input_dim
+        head_config['head_input_channels'] = head_input_channels
+        head_config['head_input_length'] = self.fusion.output_length
         head_config['targets'] = self.targets
         self.prediction_head = HeadClass(head_config)
 

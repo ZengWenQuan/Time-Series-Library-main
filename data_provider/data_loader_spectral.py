@@ -63,8 +63,12 @@ class Dataset_Spectral(Dataset):
             #print("Calculating statistics for scaled training data...")
             print("scale后数据统计")
             self._calculate_and_print_stats(pd.DataFrame(self.data_continuum), "Continuum Spectra", stat_type='feature')
-            #self._calculate_and_print_stats(pd.DataFrame(df_normalized), "Normalized Spectra", stat_type='feature')
+            self._calculate_and_print_stats(pd.DataFrame(self.data_normalized), "Normalized Spectra", stat_type='feature')
             self._calculate_and_print_stats(pd.DataFrame(self.data_label), "Labels", stat_type='label')
+            # --- ADDED: Apply augmentations if they exist ---
+            self.data_continuum = self.transform(self.data_continuum)
+            self.data_normalized = self.transform(self.data_normalized)
+            print(f"训练集使用数据增强:{self.transform.aval_name}")
 
         print(f"[{self.__class__.__name__}] flag: {self.flag}")
         print(f"continuum shape: {self.data_continuum.shape}, normalized shape: {self.data_normalized.shape}, label shape: {self.data_label.shape}")
@@ -92,10 +96,6 @@ class Dataset_Spectral(Dataset):
         seq_x_continuum = self.data_continuum[index].copy()
         seq_x_normalized = self.data_normalized[index].copy()
         
-        # --- ADDED: Apply augmentations if they exist ---
-        if self.transform:
-            seq_x_continuum = self.transform(seq_x_continuum)
-            seq_x_normalized = self.transform(seq_x_normalized)
 
         # 使用 np.stack 将两个 (L,) 的向量合并成一个 (L, 2) 的二维数组
         x_combined = np.stack([seq_x_continuum, seq_x_normalized], axis=-1)
