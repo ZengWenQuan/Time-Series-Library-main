@@ -70,6 +70,11 @@ if __name__ == '__main__':
     parser.add_argument('--vali_interval', type=int, default=1, help='Validate every N epochs')
     parser.add_argument('--checkpoints', type=str, default=None, help='Path to a checkpoint to resume training from')
 
+    # --- Finetuning ---
+    parser.add_argument('--disable_finetune', dest='do_finetune', action='store_false', help='Disable the finetuning phase (which is on by default)')
+    parser.add_argument('--finetune_lr', type=float, default=None, help='Optional: Custom learning rate for finetuning')
+    parser.add_argument('--finetune_epochs', type=int, default=None, help='Optional: Custom number of epochs for finetuning')
+
     # --- GPU ---
     parser.add_argument('--use_gpu', type=bool, default=True, help='Use GPU')
     parser.add_argument('--gpu', type=int, default=0, help='GPU ID')
@@ -131,9 +136,17 @@ if __name__ == '__main__':
             print(f'>>>>>>>start training : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
             exp = Exp(args)
             exp.train()
-
-            print(f'>>>>>>>testing : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+        
+            print(f'>>>>>>>testing after training : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
             exp.test()
+
+            if args.do_finetune:
+                print(f'>>>>>>>start finetuning : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
+                exp.finetune(finetune_lr=args.finetune_lr, finetune_epochs=args.finetune_epochs)
+
+                print(f'>>>>>>>testing after finetuning : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+                exp.test()
+
             torch.cuda.empty_cache()
     else:
         exp = Exp(args)

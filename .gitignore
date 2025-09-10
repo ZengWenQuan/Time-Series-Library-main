@@ -7,6 +7,12 @@ test_sctrp.ipynb
 *.so
 runs/
 mlruns/
+temp_plot.py
+plot_hr_diagram.py
+foundation_model_finetuning_strategy.md
+plot_prediction_scatter.py
+two_stage_search_strategy.md
+cemp_plots.ipynb
 # Distribution / packaging
 .Python
 build/

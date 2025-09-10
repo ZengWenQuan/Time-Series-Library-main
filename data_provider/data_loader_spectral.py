@@ -8,7 +8,8 @@ import random
 class Dataset_Spectral(Dataset):
     def __init__(self, args, flag='train', show_stats=False, feature_scaler=None, label_scaler=None):
         assert flag in ['train', 'test', 'val']
-        self.flag=flag
+        self.flag = flag
+        self.is_finetune = getattr(args, 'is_finetune', False)
 
         self.args = args
         self.root_path = args.root_path
@@ -16,7 +17,7 @@ class Dataset_Spectral(Dataset):
 
         self.feature_scaler = feature_scaler
         self.label_scaler = label_scaler
-        self.transform = getattr(args, 'train_transform', None) if self.flag == 'train' else  None
+        self.transform = getattr(args, 'train_transform', None) if self.flag == 'train' else None
         self.__read_data__()
 
     def __read_data__(self):
@@ -27,6 +28,10 @@ class Dataset_Spectral(Dataset):
         df_continuum = pd.read_csv(continuum_path, index_col=0)
         df_normalized = pd.read_csv(normalized_path, index_col=0)
         df_label = pd.read_csv(label_path, index_col=0)
+
+        if self.is_finetune:
+            print("Filtering for finetuning dataset (FeH < -2)")
+            df_label = df_label[df_label['FeH'] < -2]
 
         common_obsids = df_continuum.index.intersection(df_normalized.index).intersection(df_label.index)
         

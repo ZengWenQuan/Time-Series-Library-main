@@ -1,3 +1,4 @@
+from utils.loss import select_criterion
 import os
 import torch
 import torch.nn as nn
@@ -253,6 +254,9 @@ class Exp_Basic(object):
         self.test_data, self.test_loader =None
         raise NotImplementedError("Subclasses must implement _get_data()")
 
+    def _get_finetune_data(self):
+        raise NotImplementedError("Subclasses must implement _get_finetune_data() to be able to finetune.")
+
     def _select_optimizer(self):
         # --- Optimizer Selection ---
         # Instructions: Uncomment the optimizer you want to use.
@@ -446,6 +450,158 @@ class Exp_Basic(object):
         # mlflow.end_run()
         return self.model
 
+    def finetune(self, finetune_lr=None, finetune_epochs=None):
+        # --- Get Finetuning Data ---
+        self._get_finetune_data()
+
+        # --- Setup for Finetuning ---
+        original_run_dir = self.args.run_dir
+        finetune_dir = os.path.join(original_run_dir, 'finetune')
+        self.args.run_dir = finetune_dir # Temporarily switch run directory
+        os.makedirs(finetune_dir, exist_ok=True)
+        self.logger.info(f"--- Starting Finetuning ---")
+        self.logger.info(f"Finetuning outputs will be saved in: {finetune_dir}")
+
+        # --- Load Best Pre-trained Model ---
+        pretrained_checkpoint_path = os.path.join(original_run_dir, 'checkpoints', 'best.pth')
+        if os.path.exists(pretrained_checkpoint_path):
+            self.logger.info(f"Loading best model from pre-training for finetuning: {pretrained_checkpoint_path}")
+            self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device))
+        else:
+            self.logger.warning("No best pre-trained model found. Finetuning from the current model state.")
+
+        # --- Check for Finetuning Data ---
+        if not all(hasattr(self, attr) for attr in ['finetune_train_loader', 'finetune_vali_data', 'finetune_vali_loader']):
+            self.logger.error("Finetuning data not found. `_get_finetune_data()` did not load the required data.")
+            self.args.run_dir = original_run_dir # Restore dir before exiting
+            return
+
+        # --- Training Setup ---
+        chechpoint_path = os.path.join(self.args.run_dir, 'checkpoints')
+        os.makedirs(chechpoint_path, exist_ok=True)
+        
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+        
+        # Set finetuning learning rate
+        original_lr = self.args.learning_rate
+        ft_lr = finetune_lr if finetune_lr is not None else original_lr / 10.0
+        self.args.learning_rate = ft_lr
+        model_optim = self._select_optimizer()
+        self.args.learning_rate = original_lr # Restore for other potential calls
+
+        scheduler = self._select_scheduler(model_optim)
+        criterion = self._select_criterion()
+
+        history_train_loss, history_vali_loss, history_lr = [], [], []
+        best_feh_mae = float('inf')
+        epoch_time = time.time()
+        
+        epochs = finetune_epochs if finetune_epochs is not None else self.args.train_epochs // 2
+
+        # --- Finetuning Loop ---
+        for epoch in range(epochs):
+            epoch_grad_norms = []
+            self.model.train()
+            train_loss = []
+            for i, (batch_x, batch_y, batch_obsid) in enumerate(self.finetune_train_loader): # Use finetune loader
+                model_optim.zero_grad()
+                
+                if self.scaler is not None:
+                    with torch.amp.autocast('cuda'):
+                        outputs = self.model(batch_x.float().to(self.device))
+                        loss = criterion(outputs, batch_y.float().to(self.device))
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(model_optim)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                    self.scaler.step(model_optim)
+                    self.scaler.update()
+                else:
+                    outputs = self.model(batch_x.float().to(self.device))
+                    loss = criterion(outputs, batch_y.float().to(self.device))
+                    loss.backward()
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.args.max_grad_norm)
+                    model_optim.step()
+                
+                epoch_grad_norms.append(grad_norm.item())
+                train_loss.append(loss.item())
+
+            # --- Evaluation ---
+            train_loss_avg = np.average(train_loss)
+            vali_loss, vali_preds, vali_trues, _ = self.vali(self.finetune_vali_data, self.finetune_vali_loader, criterion) # Use finetune data
+
+            if hasattr(self, 'finetune_test_loader') and self.finetune_test_loader:
+                test_loss, test_preds, test_trues, _ = self.vali(self.finetune_test_data, self.finetune_test_loader, criterion) # Use finetune data
+            else:
+                test_loss, test_preds, test_trues = None, None, None
+
+            train_eval_loss, train_preds, train_trues, _ = self.vali(self.finetune_train_data, self.finetune_train_loader, criterion) # Use finetune data
+
+            # --- Metric Processing (will use the new self.args.run_dir) ---
+            train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
+            vali_reg_metrics = self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "latest")
+            if test_preds is not None:
+                test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
+            
+            if test_preds is not None:
+                combined_preds = np.concatenate([vali_preds, test_preds])
+                combined_trues = np.concatenate([vali_trues, test_trues])
+                combined_reg_metrics = self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "latest")
+
+            # --- Logging and History ---
+            avg_grad_norm = np.mean(epoch_grad_norms)
+            cost_time = time.time() - epoch_time
+            epoch_time = time.time()
+            remaining_time = cost_time * (epochs - epoch - 1)
+
+            current_lr = model_optim.param_groups[0]['lr']
+            history_train_loss.append(train_loss_avg); history_vali_loss.append(vali_loss); history_lr.append(current_lr)
+            
+            formatted_cost_time = format_duration(cost_time)
+            formatted_eta = format_duration(remaining_time)
+
+            log_msg = f"Finetune Epoch: {epoch + 1} /{epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
+            if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
+            log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
+            log_msg += f" | Time: {formatted_cost_time} | ETA: {formatted_eta}"
+            
+            if (epoch + 1) % self.args.vali_interval == 0:
+                if train_reg_metrics: print(f"Finetune Train Metrics:\n{format_metrics(train_reg_metrics)}")
+                if vali_reg_metrics: print(f"Finetune Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
+                if locals().get('test_reg_metrics',None): print(f"Finetune Test Metrics:\n{format_metrics(test_reg_metrics)}")
+                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None: print(f"Finetune Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
+
+            # --- Early Stopping & Best Model Checkpoint Saving ---
+            prev_best_loss = early_stopping.val_loss_min
+            early_stopping(vali_loss, self.model, chechpoint_path)
+            if vali_loss < prev_best_loss:
+                self.logger.info(f"New best finetune validation loss: {vali_loss:.4f}. Model checkpoint saved.")
+
+            if 'combined_reg_metrics' in locals() and combined_reg_metrics and 'FeH_mae' in combined_reg_metrics:
+                current_feh_mae = combined_reg_metrics['FeH_mae']
+            else:
+                current_feh_mae = vali_reg_metrics['FeH_mae']
+            if current_feh_mae < best_feh_mae:
+                best_feh_mae = current_feh_mae
+                torch.save(self.model.state_dict(), chechpoint_path + '/' + 'best.pth')
+
+                self.logger.info(f"New best finetune FeH MAE: {best_feh_mae:.4f}. Saving metrics for this epoch as 'best'...")
+                self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")
+                self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "best")
+                if test_preds is not None:
+                    self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "best")
+                    self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "best")
+
+            if early_stopping.early_stop: break
+            if scheduler is not None: scheduler.step() 
+
+            save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir) # will save to finetune dir
+            self.logger.info(log_msg)
+        
+        # The run_dir is intentionally NOT restored, so subsequent calls (like test)
+        # will use the finetuning directory for checkpoints and results.
+        self.logger.info(f"--- Finetuning Finished ---")
+        return self.model
+
 
     def test(self):
         # 1. 加载最优模型
@@ -550,22 +706,7 @@ class Exp_Basic(object):
         self.logger.info("--- test_all completed ---")
 
     def _select_criterion(self):
-        loss=self.args.loss.lower()
-        if loss == 'Mse'.lower() or loss == 'l2'.lower() :
-            return nn.MSELoss()
-        elif loss == 'Mae'.lower() or loss =='l1'.lower():
-            return nn.L1Loss()
-        elif loss == 'SmoothL1'.lower():
-            return nn.SmoothL1Loss()
-        elif loss == 'Huber'.lower():
-            return nn.HuberLoss(delta=1.0)
-        elif loss == 'LogCosh'.lower():
-            def logcosh_loss(pred, target):
-                return torch.mean(torch.log(torch.cosh(pred - target)))
-            return logcosh_loss
-        else:
-            print(f"警告: 未知的损失函数 '{loss}'，使用默认的MSE损失")
-            return nn.MSELoss()        
+        return select_criterion(self.args.loss)        
     def _setup_logger(self):
         import datetime
         # Prevent the logger from propagating to the root logger 
