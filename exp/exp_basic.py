@@ -104,7 +104,7 @@ class Exp_Basic(object):
         # --- ADDED: Resume from checkpoint logic ---
         if getattr(self.args, 'resume_from', None) and os.path.exists(self.args.resume_from):
             self.logger.info(f"Resuming training from checkpoint: {self.args.resume_from}")
-            self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device))
+            self.model.load_state_dict(torch.load(self.args.resume_from, map_location=self.device), strict=False)
         self._build_train_transforms()
     def _load_and_merge_configs(self, main_config_path):
         """
@@ -164,6 +164,14 @@ class Exp_Basic(object):
         self.args.sample_batch = sample_batch
         model = model_class(self.args).float()
         model.to(self.device)
+
+        # --- ADDED: Load pre-trained model for finetuning ---
+        if self.args.checkpoints and os.path.exists(self.args.checkpoints):
+            self.logger.info(f"Loading pre-trained model from: {self.args.checkpoints}")
+            try:
+                model.load_state_dict(torch.load(self.args.checkpoints, map_location=self.device), strict=False)
+            except Exception as e:
+                self.logger.error(f"Error loading checkpoint: {e}")
 
         # --- GFLOPs and Parameters Calculation ---
         model_to_inspect = model.module if isinstance(model, nn.DataParallel) else model
@@ -259,21 +267,44 @@ class Exp_Basic(object):
 
     def _select_optimizer(self):
         # --- Optimizer Selection ---
-        # Instructions: Uncomment the optimizer you want to use.
         import torch.optim as optim
-        # Option 1: Adam (Default)
-        optimizer = optim.Adam(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+
+        if getattr(self.args, 'freeze_body', False):
+            self.logger.info("Freezing model body, only training the head.")
+            
+            # First, make sure we're dealing with the base model if it's wrapped
+            model_to_inspect = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
+
+            params_to_update = []
+            for name, param in model_to_inspect.named_parameters():
+                if 'prediction_head' in name or 'head' in name: # More robust check
+                    param.requires_grad = True
+                    params_to_update.append(param)
+                    self.logger.info(f"Parameter '{name}' will be trained.")
+                else:
+                    param.requires_grad = False
+            
+            if not params_to_update:
+                self.logger.warning("Warning: No parameters found for the prediction head. The optimizer will have nothing to train.")
+
+        else:
+            self.logger.info("Training all model parameters.")
+            params_to_update = self.model.parameters()
+
+        # Select the optimizer type
+        optimizer_type = getattr(self.args, 'optimizer', 'Adam').lower()
         
-        # Option 2: AdamW
-        # optimizer = optim.AdamW(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-        
-        # Option 3: SGD with Momentum
-        # momentum = getattr(self.args, 'momentum', 0.9) # You can set momentum in your YAML if needed
-        # optimizer = optim.SGD(self.model.parameters(), lr=self.args.learning_rate, momentum=momentum, weight_decay=self.args.weight_decay)
-        
-        # Option 4: RMSprop
-        # optimizer = optim.RMSprop(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
-        
+        if optimizer_type == 'adamw':
+            optimizer = optim.AdamW(params_to_update, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        elif optimizer_type == 'sgd':
+            momentum = getattr(self.args, 'momentum', 0.9)
+            optimizer = optim.SGD(params_to_update, lr=self.args.learning_rate, momentum=momentum, weight_decay=self.args.weight_decay)
+        elif optimizer_type == 'rmsprop':
+            optimizer = optim.RMSprop(params_to_update, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+        else: # Default to Adam
+            optimizer = optim.Adam(params_to_update, lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
+
+        self.logger.info(f"Optimizer selected: {optimizer.__class__.__name__}")
         return optimizer
 
     def _select_scheduler(self, optimizer):
@@ -466,7 +497,7 @@ class Exp_Basic(object):
         pretrained_checkpoint_path = os.path.join(original_run_dir, 'checkpoints', 'best.pth')
         if os.path.exists(pretrained_checkpoint_path):
             self.logger.info(f"Loading best model from pre-training for finetuning: {pretrained_checkpoint_path}")
-            self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device), strict=False)
         else:
             self.logger.warning("No best pre-trained model found. Finetuning from the current model state.")
 
@@ -608,7 +639,7 @@ class Exp_Basic(object):
         checkpoint_path = os.path.join(self.args.run_dir, 'checkpoints', 'best.pth')
         if os.path.exists(checkpoint_path):
             self.logger.info(f"Loading best model from {checkpoint_path}")
-            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=False)
         else:
             self.logger.warning("No best model checkpoint found. Testing on the final model state.")
 
@@ -660,7 +691,7 @@ class Exp_Basic(object):
             self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting test_all.")
             return
         self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
-        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=False)
 
         # --- Loop through each dataset (train, val, test) and evaluate ---
         dataset_splits = {

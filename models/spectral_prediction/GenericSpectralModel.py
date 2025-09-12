@@ -16,122 +16,198 @@ class GenericSpectralModel(nn.Module):
     该模型的设计是完全配置驱动的，其__init__和forward逻辑模仿了项目中的标准实现，
     使其能够灵活处理spectral_prediction和regression等不同任务。
     """
-    def __init__(self, configs): # <-- 增加 sample_batch 参数
+    def __init__(self, configs):
         super(GenericSpectralModel, self).__init__()
         self.task_name = configs.task_name
         self.targets = configs.targets
-        
+
         with open(configs.model_conf, 'r') as f:
             model_config = yaml.safe_load(f)
-        self.model_config = model_config # Save config for profiling
+        self.model_config = model_config
 
-        # --- 新增：获取全局设置并向下传递 ---
         global_settings = model_config.get('global_settings', {})
 
-        # --- 模仿 CustomFusionNet 的初始化逻辑 ---
+        # Initialize all modules to None
+        self.continuum_branch = None
+        self.normalized_branch = None
+        self.fusion = None
+        self.prediction_head = None
 
-        # 1. 初始化归一化谱分支 (所有任务都需要)
-        norm_branch_config = model_config['normalized_branch_config']
-        norm_branch_config.update(global_settings)
-        NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-        self.normalized_branch = NormBranchClass(norm_branch_config)
-        
-        # 2. 初始化所有分支和融合模块
-        cont_branch_config = model_config['continuum_branch_config']
-        cont_branch_config.update(global_settings)
-        ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-        self.continuum_branch = ContBranchClass(cont_branch_config)
-        
-        fusion_config = model_config['fusion_config']
-        fusion_config.update(global_settings)
-        FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
-        fusion_config['channels_norm'] = self.normalized_branch.output_channels
-        fusion_config['channels_cont'] = self.continuum_branch.output_channels
-        fusion_config['len_norm'] = self.normalized_branch.output_length
-        fusion_config['len_cont'] = self.continuum_branch.output_length
-        self.fusion = FusionClass(fusion_config)
-        head_input_channels = self.fusion.output_channels
+        # --- Dynamically build the model based on config ---
+        head_input_channels = 0
+        head_input_length = 0
 
-        # 3. 初始化预测头模块
-        head_config = model_config['head_config']
-        head_config.update(global_settings)
-        HeadClass = HEAD_REGISTRY[model_config['head_name']]
-        head_config['head_input_channels'] = head_input_channels
-        head_config['head_input_length'] = self.fusion.output_length
-        head_config['targets'] = self.targets
-        self.prediction_head = HeadClass(head_config)
+        # 1. Initialize Continuum Branch (if configured)
+        if 'continuum_branch_config' in model_config and 'continuum_branch_name' in model_config:
+            print("Initializing Continuum Branch...")
+            cont_branch_config = model_config['continuum_branch_config']
+            cont_branch_config.update(global_settings)
+            ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
+            self.continuum_branch = ContBranchClass(cont_branch_config)
+
+        # 2. Initialize Normalized Branch (if configured)
+        if 'normalized_branch_config' in model_config and 'normalized_branch_name' in model_config:
+            print("Initializing Normalized Branch...")
+            norm_branch_config = model_config['normalized_branch_config']
+            norm_branch_config.update(global_settings)
+            NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
+            self.normalized_branch = NormBranchClass(norm_branch_config)
+
+        # 3. Initialize Fusion module (if configured)
+        if 'fusion_config' in model_config and 'fusion_name' in model_config:
+            print("Initializing Fusion Module (allowing single branch)...")
+            fusion_config = model_config['fusion_config']
+            fusion_config.update(global_settings)
+            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
+
+            # Conditionally provide branch info to fusion config
+            if self.normalized_branch:
+                fusion_config['channels_norm'] = self.normalized_branch.output_channels
+                fusion_config['len_norm'] = self.normalized_branch.output_length
+            if self.continuum_branch:
+                fusion_config['channels_cont'] = self.continuum_branch.output_channels
+                fusion_config['len_cont'] = self.continuum_branch.output_length
+
+            self.fusion = FusionClass(fusion_config)
+            
+            # Determine head input based on what will be produced after fusion/bypass
+            if self.continuum_branch and self.normalized_branch:
+                head_input_channels = self.fusion.output_channels
+                head_input_length = self.fusion.output_length
+            elif self.continuum_branch:
+                head_input_channels = self.continuum_branch.output_channels
+                head_input_length = self.continuum_branch.output_length
+            elif self.normalized_branch:
+                head_input_channels = self.normalized_branch.output_channels
+                head_input_length = self.normalized_branch.output_length
+        else:
+            # No fusion module, determine head input from available branches by concatenation
+            print("No Fusion module configured. Head input will be concatenation of available branch outputs.")
+            if self.continuum_branch:
+                head_input_channels += self.continuum_branch.output_channels
+                head_input_length = self.continuum_branch.output_length # Assume lengths are compatible
+            if self.normalized_branch:
+                head_input_channels += self.normalized_branch.output_channels
+                head_input_length = self.normalized_branch.output_length # Overwrite or check for consistency
+
+        if head_input_channels == 0:
+            raise ValueError("No branches were configured. The model has no inputs for the prediction head.")
+
+        # 4. Initialize Prediction Head (always required)
+        if 'head_config' in model_config and 'head_name' in model_config:
+            print("Initializing Prediction Head...")
+            head_config = model_config['head_config']
+            head_config.update(global_settings)
+            HeadClass = HEAD_REGISTRY[model_config['head_name']]
+            head_config['head_input_channels'] = head_input_channels
+            head_config['head_input_length'] = head_input_length
+            head_config['targets'] = self.targets
+            self.prediction_head = HeadClass(head_config)
+        else:
+            raise ValueError("A 'head_config' must be provided in the model configuration.")
 
 
     def profile_model(self, sample_batch):
         """
         Calculates and returns the FLOPs and parameters for each submodule.
+        This method is robust to missing modules for ablation studies.
         """
         from thop import profile
         stats = {}
         device = sample_batch.device
-        
-        # --- 模仿 forward pass 来获取各部分的输入 ---
+
+        # --- Input Handling ---
+        x_continuum, x_normalized = None, None
         if self.task_name == 'regression':
-            x_continuum, x_normalized = sample_batch, sample_batch
-
+            x_continuum = x_normalized = sample_batch
         elif self.task_name == 'spectral_prediction':
-            x=sample_batch
-            if x.dim() == 3 and x.shape[-1] == 2:
-                 x_continuum, x_normalized = x[:, :, 0].unsqueeze(1), x[:, :, 1].unsqueeze(1)
-            elif x.dim()==2 and x.shape[-1]==2:
-                x_continuum, x_normalized = x[:, 0].unsqueeze(1), x[:, 1].unsqueeze(1)
-        
-        # 对两种任务统一进行性能分析
-        # 1. Normalized Branch
-        macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
-        stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
-        features_norm = self.normalized_branch(x_normalized)
+            if sample_batch.dim() == 3 and sample_batch.shape[-1] == 2:
+                x_continuum = sample_batch[:, :, 0].unsqueeze(1)
+                x_normalized = sample_batch[:, :, 1].unsqueeze(1)
+            elif sample_batch.dim() == 2 and sample_batch.shape[-1] == 2:
+                x_continuum = sample_batch[:, 0].unsqueeze(1)
+                x_normalized = sample_batch[:, 1].unsqueeze(1)
 
-        # 2. Continuum Branch
-        macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
-        stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
-        features_cont = self.continuum_branch(x_continuum)
+        # --- Profile available modules ---
+        features_cont, features_norm = None, None
+        head_input = None
 
-        # 3. Fusion Layer
-        macs, params = profile(self.fusion, inputs=(features_norm, features_cont), verbose=False)
-        stats['fusion'] = {'flops': macs * 2, 'params': params}
-        fused_sequence = self.fusion(features_norm, features_cont)
+        if self.continuum_branch and x_continuum is not None:
+            macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
+            stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
+            features_cont = self.continuum_branch(x_continuum)
 
-        # 4. Prediction Head
-        macs, params = profile(self.prediction_head, inputs=(fused_sequence,), verbose=False)
-        stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+        if self.normalized_branch and x_normalized is not None:
+            macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
+            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
+            features_norm = self.normalized_branch(x_normalized)
+
+        if self.fusion:
+            if features_norm is None or features_cont is None:
+                raise ValueError("Profiling fusion module requires both branches to be active.")
+            macs, params = profile(self.fusion, inputs=(features_norm, features_cont), verbose=False)
+            stats['fusion'] = {'flops': macs * 2, 'params': params}
+            head_input = self.fusion(features_norm, features_cont)
+        else:
+            existing_features = [f for f in [features_cont, features_norm] if f is not None]
+            if len(existing_features) > 1:
+                head_input = torch.cat(existing_features, dim=1)
+            elif existing_features:
+                head_input = existing_features[0]
+
+        if self.prediction_head and head_input is not None:
+            macs, params = profile(self.prediction_head, inputs=(head_input,), verbose=False)
+            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
         
         return stats
                 
 
-    def forward(self, x, x_normalized=None):
-        # --- 模仿 CustomFusionNet 的前向传播逻辑 ---
+    def forward(self, x):
+        # --- Input Handling based on task ---
+        x_continuum, x_normalized = None, None
         if self.task_name == 'regression':
-            return self.forward_regression(x)
+            # For regression, the same input 'x' is used for all present branches
+            x_continuum = x if self.continuum_branch else None
+            x_normalized = x if self.normalized_branch else None
         elif self.task_name == 'spectral_prediction':
-            # 处理两种可能的输入格式
+            # For spectral prediction, input 'x' is expected to have two channels
             if x.dim() == 3 and x.shape[-1] == 2:
-                 x_continuum, x_normalized = x[:, :, 0].unsqueeze(1), x[:, :, 1].unsqueeze(1)
-            elif x.dim()==2 and x.shape[-1]==2:
-                x_continuum, x_normalized = x[:, 0].unsqueeze(1), x[:, 1].unsqueeze(1)
-
-            return self.forward_spectral_prediction(x_continuum, x_normalized)
+                x_continuum = x[:, :, 0].unsqueeze(1) if self.continuum_branch else None
+                x_normalized = x[:, :, 1].unsqueeze(1) if self.normalized_branch else None
+            else:
+                raise ValueError(f"Unexpected input shape for spectral_prediction: {x.shape}. Expected (batch, seq_len, 2).")
         else:
-            raise ValueError(f"未知的任务类型: {self.task_name}")
+            raise ValueError(f"Unknown task_name: {self.task_name}")
 
-    def forward_spectral_prediction(self, x_continuum, x_normalized):
-        features_norm = self.normalized_branch(x_normalized)
-        features_cont = self.continuum_branch(x_continuum)
-        fused_sequence = self.fusion(features_norm, features_cont)
-        return self.prediction_head(fused_sequence)
+        # --- Branch Forward Pass ---
+        features_cont = self.continuum_branch(x_continuum) if self.continuum_branch and x_continuum is not None else None
+        features_norm = self.normalized_branch(x_normalized) if self.normalized_branch and x_normalized is not None else None
 
-    def forward_regression(self, x):
-        # 将单个输入序列传递给两个分支
-        features_norm = self.normalized_branch(x)
-        features_cont = self.continuum_branch(x)
-        
-        # 融合特征并进行预测
-        fused_sequence = self.fusion(features_norm, features_cont)
-        return self.prediction_head(fused_sequence)
+        # --- Fusion or Bypass/Concatenation ---
+        head_input = None
+        existing_features = [f for f in [features_cont, features_norm] if f is not None]
+
+        if not existing_features:
+            raise ValueError("No branches were configured or processed to provide features to the head.")
+
+        if self.fusion:
+            if len(existing_features) == 2:
+                # Both branches are active, perform fusion. Order (norm, cont) is important for many modules.
+                head_input = self.fusion(features_norm, features_cont)
+            elif len(existing_features) == 1:
+                # Only one branch is active, bypass the fusion module.
+                head_input = existing_features[0]
+        else:
+            # No fusion module configured, default to concatenation.
+            if len(existing_features) > 1:
+                head_input = torch.cat(existing_features, dim=1)
+            else:
+                head_input = existing_features[0]
+
+        # --- Head Forward Pass ---
+        if self.prediction_head is None:
+            raise ValueError("Prediction head is not initialized.")
+            
+        return self.prediction_head(head_input)
 
     

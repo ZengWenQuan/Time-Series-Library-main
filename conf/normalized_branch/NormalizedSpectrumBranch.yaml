@@ -1,6 +1,6 @@
-
-pyramid_channels: [8, 8, 16]
+pyramid_channels: [32, 32, 16]
 kernel_sizes: [3, 5, 7]
 pool_size: 2
+batch_norm: false
 use_attention: true
 attention_reduction: 4

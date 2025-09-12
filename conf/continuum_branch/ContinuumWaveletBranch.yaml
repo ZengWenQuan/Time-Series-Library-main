@@ -1,5 +1,6 @@
 wavelet_name: 'db4'
 wavelet_levels: 2
+batch_norm: false
 cnn:
   layers:
     - {out_channels_per_path: 16, pool_size: 2}

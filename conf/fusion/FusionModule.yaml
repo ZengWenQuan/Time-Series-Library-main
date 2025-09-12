@@ -1,0 +1,11 @@
+strategy: 'add'
+# Adjustment for normalized branch output before fusion
+adjustment_config_norm:
+  out_channels: 64
+  out_len: 600
+# Adjustment for continuum branch output before fusion
+adjustment_config_cont:
+  out_channels: 64
+  out_len: 600
+# Output channels after concat and 1x1 conv
+out_channels: 64

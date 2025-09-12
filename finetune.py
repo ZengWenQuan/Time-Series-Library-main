@@ -71,6 +71,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default=None, help='Path to a checkpoint to resume training from')
 
     # --- Finetuning ---
+    parser.add_argument('--freeze_body', action='store_true', help='Freeze the body of the model and only finetune the head')
+
+    # --- Finetuning ---
     parser.add_argument('--disable_finetune', dest='do_finetune', action='store_false', help='Disable the finetuning phase (which is on by default)')
     parser.add_argument('--finetune_lr', type=float, default=1e-1, help='Optional: Custom learning rate for finetuning')
     parser.add_argument('--finetune_epochs', type=int, default=10, help='Optional: Custom number of epochs for finetuning')
@@ -125,7 +128,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             # --- Set up folder for this run ---
             setting = f'{args.model_id}_{args.task_name}_{args.model}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_{ii}'
-            run_dir = os.path.join('runs', args.task_name, args.model, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+            run_dir = os.path.join('runs', args.task_name, args.model, datetime.datetime.now().strftime("%Y%m%d_%H%M%S-finetune"))
             os.makedirs(run_dir, exist_ok=True)
             args.run_dir = run_dir
 
@@ -139,6 +142,13 @@ if __name__ == '__main__':
         
             print(f'>>>>>>>testing after training : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
             exp.test()
+
+            if args.do_finetune:
+                print(f'>>>>>>>start finetuning : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
+                exp.finetune(finetune_lr=args.finetune_lr, finetune_epochs=args.finetune_epochs)
+
+                print(f'>>>>>>>testing after finetuning : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+                exp.test()
 
             torch.cuda.empty_cache()
     else:

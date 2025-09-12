@@ -1,0 +1,23 @@
+# 消融实验配置文件: 只使用归一化谱分支
+
+# --- 引用主配置的全局设定 ---
+# (global_settings and anchor_vars will be inherited if this file is merged,
+# but for clarity, we state that this config relies on them.)
+# --- 新增：定义可复用的锚点 ---
+anchor_vars:
+  input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整
+  fusion_channels: &fusion_c 16
+  fusion_len: &fusion_l 128 # 假设融合后的目标长度
+
+# --- 新增：全局模型设置 ---
+global_settings:
+  input_len: *input_l  # 假设输入长度，需要根据实际数据调整
+  use_batch_norm: &use_bn false
+  dropout_rate: &dropout_p 0.1
+
+# --- 训练、分支与头模块选择 ---
+training_name: 'mse_cos'
+normalized_branch_name: 'NormalizedSpectrumBranch'
+# continuum_branch_name: 'ContinuumWaveletBranch' # <-- 消融掉
+# fusion_name: 'FusionModule' # <-- 消融掉
+head_name: 'MultiTaskHead'
