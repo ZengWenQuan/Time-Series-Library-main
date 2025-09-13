@@ -494,12 +494,47 @@ class Exp_Basic(object):
         self.logger.info(f"Finetuning outputs will be saved in: {finetune_dir}")
 
         # --- Load Best Pre-trained Model ---
-        pretrained_checkpoint_path = os.path.join(original_run_dir, 'checkpoints', 'best.pth')
-        if os.path.exists(pretrained_checkpoint_path):
-            self.logger.info(f"Loading best model from pre-training for finetuning: {pretrained_checkpoint_path}")
-            self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device), strict=False)
-        else:
-            self.logger.warning("No best pre-trained model found. Finetuning from the current model state.")
+        # pretrained_checkpoint_path = os.path.join(original_run_dir, 'checkpoints', 'best.pth')
+        # if os.path.exists(pretrained_checkpoint_path):
+        #     self.logger.info(f"Loading best model from pre-training for finetuning: {pretrained_checkpoint_path}")
+        #     self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device), strict=False)
+        # else:
+        #     self.logger.warning("No best pre-trained model found. Finetuning from the current model state.")
+
+        # --- ADDED: Evaluate model on full dataset BEFORE finetuning ---
+        self.logger.info("--- Starting evaluation on full dataset before finetuning ---")
+        
+        # Store current run_dir and set a new one for saving pre-finetune results
+        original_finetune_dir = self.args.run_dir
+        pre_finetune_save_dir = os.path.join(original_finetune_dir, 'pre_finetune_evaluation')
+        os.makedirs(pre_finetune_save_dir, exist_ok=True)
+        self.args.run_dir = pre_finetune_save_dir
+        self.logger.info(f"Saving pre-finetuning evaluation results to: {pre_finetune_save_dir}")
+
+        criterion = self._select_criterion()
+        
+        # --- Evaluate on Train Set ---
+        if self.train_loader:
+            _, train_preds, train_trues, _ = self.vali(self.train_data, self.train_loader, criterion)
+            self.logger.info("Calculating and saving metrics for TRAIN set before finetuning...")
+            self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "pre_finetune")
+
+        # --- Evaluate on Validation Set ---
+        if self.vali_loader:
+            _, vali_preds, vali_trues, _ = self.vali(self.vali_data, self.vali_loader, criterion)
+            self.logger.info("Calculating and saving metrics for VALIDATION set before finetuning...")
+            self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "pre_finetune")
+
+        # --- Evaluate on Test Set ---
+        if self.test_loader:
+            _, test_preds, test_trues, _ = self.vali(self.test_data, self.test_loader, criterion)
+            self.logger.info("Calculating and saving metrics for TEST set before finetuning...")
+            self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "pre_finetune")
+
+        # Restore original finetune run_dir
+        self.args.run_dir = original_finetune_dir
+        self.logger.info(f"Restored run directory to: {self.args.run_dir}")
+        # --- END of pre-finetuning evaluation ---
 
         # --- Check for Finetuning Data ---
         if not all(hasattr(self, attr) for attr in ['finetune_train_loader', 'finetune_vali_data', 'finetune_vali_loader']):
@@ -514,11 +549,8 @@ class Exp_Basic(object):
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
         
         # Set finetuning learning rate
-        original_lr = self.args.learning_rate
-        ft_lr = finetune_lr if finetune_lr is not None else original_lr / 10.0
-        self.args.learning_rate = ft_lr
+        self.args.learning_rate = self.args.finetune_lr
         model_optim = self._select_optimizer()
-        self.args.learning_rate = original_lr # Restore for other potential calls
 
         scheduler = self._select_scheduler(model_optim)
         criterion = self._select_criterion()
@@ -527,7 +559,7 @@ class Exp_Basic(object):
         best_feh_mae = float('inf')
         epoch_time = time.time()
         
-        epochs = finetune_epochs if finetune_epochs is not None else self.args.train_epochs // 2
+        epochs = self.args.finetune_epochs
 
         # --- Finetuning Loop ---
         for epoch in range(epochs):

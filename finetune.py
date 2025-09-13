@@ -74,7 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--freeze_body', action='store_true', help='Freeze the body of the model and only finetune the head')
 
     # --- Finetuning ---
-    parser.add_argument('--disable_finetune', dest='do_finetune', action='store_false', help='Disable the finetuning phase (which is on by default)')
+    parser.add_argument('--is_finetune', type=int ,default=1, help='Disable the finetuning phase (which is on by default)')
     parser.add_argument('--finetune_lr', type=float, default=1e-1, help='Optional: Custom learning rate for finetuning')
     parser.add_argument('--finetune_epochs', type=int, default=10, help='Optional: Custom number of epochs for finetuning')
 
@@ -136,14 +136,14 @@ if __name__ == '__main__':
             if hasattr(args, 'model_conf') and args.model_conf and os.path.exists(args.model_conf):
                 shutil.copy2(args.model_conf, run_dir)
 
-            print(f'>>>>>>>start training : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
+            # print(f'>>>>>>>start training : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
             exp = Exp(args)
-            exp.train()
+            # exp.train()
         
-            print(f'>>>>>>>testing after training : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-            exp.test()
+            # print(f'>>>>>>>testing after training : {setting}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+            # exp.test()
 
-            if args.do_finetune:
+            if args.is_finetune:
                 print(f'>>>>>>>start finetuning : {setting}>>>>>>>>>>>>>>>>>>>>>>>>>>')
                 exp.finetune(finetune_lr=args.finetune_lr, finetune_epochs=args.finetune_epochs)
 

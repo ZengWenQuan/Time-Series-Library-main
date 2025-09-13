@@ -29,8 +29,8 @@ class Dataset_Spectral(Dataset):
         df_normalized = pd.read_csv(normalized_path, index_col=0)
         df_label = pd.read_csv(label_path, index_col=0)
 
-        if self.is_finetune:
-            print("Filtering for finetuning dataset (FeH < -2)")
+        if self.is_finetune :
+            print("Filtering for finetuning dataset (FeH < -2.5)")
             df_label = df_label[df_label['FeH'] < -2]
 
         common_obsids = df_continuum.index.intersection(df_normalized.index).intersection(df_label.index)
