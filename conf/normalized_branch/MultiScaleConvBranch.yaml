@@ -1,0 +1,8 @@
+input_dim: 1
+num_layers: 2
+layer_configs:
+  - output_dim: 16
+    kernel_sizes: [3, 5, 7]
+  - output_dim: 32
+    kernel_sizes: [3, 5, 7]
+dropout: 0.1

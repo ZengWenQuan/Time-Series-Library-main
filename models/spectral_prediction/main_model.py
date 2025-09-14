@@ -52,3 +52,15 @@ class HybridFormer(GenericSpectralModel):
     - Head: DecoderHead
     """
     pass
+
+@register_model
+class AMFN(GenericSpectralModel):
+    """
+    AMFN (Attention Multi-scale Fusion Network) model.
+    Inherits all functionality from GenericSpectralModel.
+    - Continuum Branch: GlobalAttentionBranch
+    - Normalized Branch: MultiScaleConvBranch
+    - Fusion: add
+    - Head: DecoderHead
+    """
+    pass

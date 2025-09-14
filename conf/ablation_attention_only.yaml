@@ -1,0 +1,11 @@
+model_name: AMFN
+
+global_settings:
+  input_len: 4800
+
+# --- 训练、分支与头模块选择 ---
+training_name: 'mse_cos'
+#continuum_branch_name: 'GlobalAttentionBranch'
+normalized_branch_name: 'MultiScaleConvBranch'
+fusion_name: 'add'
+head_name: 'DecoderHead'
