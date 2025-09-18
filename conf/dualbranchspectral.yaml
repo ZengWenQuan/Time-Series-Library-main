@@ -8,7 +8,7 @@ anchor_vars:
 
 # --- 全局模型设置 ---
 global_settings:
-  input_length: *input_l
+  input_len: *input_l
   pred_len: *pred_l
   input_channels: *input_c
   use_batch_norm: true
