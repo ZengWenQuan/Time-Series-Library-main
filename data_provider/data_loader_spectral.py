@@ -21,31 +21,43 @@ class Dataset_Spectral(Dataset):
         self.__read_data__()
 
     def __read_data__(self):
-        normalized_path = os.path.join(self.root_path, self.flag, self.args.normalized_filename)
+        feature_path = os.path.join(self.root_path, self.flag, self.args.feature_filename)
         label_path = os.path.join(self.root_path, self.flag, self.args.labels_filename)
 
-        df_normalized = pd.read_csv(normalized_path, index_col=0)
+        if self.args.feature_filename.endswith('.csv'):
+            df_feature = pd.read_csv(feature_path, index_col=0)
+        elif self.args.feature_filename.endswith('.feather'):
+            df_feature = pd.read_feather(feature_path)
+            # Feather格式不会像CSV一样自动处理索引，因此需要手动设置
+            # 假设索引列的名称是'obsid'，如果不是，则使用第一列作为索引
+            if 'obsid' in df_feature.columns:
+                df_feature.set_index('obsid', inplace=True)
+            else:
+                df_feature.set_index(df_feature.columns[0], inplace=True)
+        else:
+            raise ValueError(f"不支持的特征文件格式: {self.args.feature_filename}。请使用 .csv 或 .feather。")
+
         df_label = pd.read_csv(label_path, index_col=0)
 
         if self.is_finetune:
             print("Filtering for finetuning dataset (FeH < -2)")
             df_label = df_label[df_label['FeH'] < -2]
 
-        common_obsids = df_normalized.index.intersection(df_label.index)
+        common_obsids = df_feature.index.intersection(df_label.index)
         
         shuffled_obsids = common_obsids.tolist()
         if self.flag == 'train':
             random.shuffle(shuffled_obsids)
 
-        df_normalized = df_normalized.loc[shuffled_obsids]
+        df_feature = df_feature.loc[shuffled_obsids]
         df_label = df_label.loc[shuffled_obsids][self.args.targets]
         
         if self.flag == 'train' and self.show_stats:
             print("Statistics for original training data (before scaling):")
-            self._calculate_and_print_stats(df_normalized, "Normalized Spectra", stat_type='feature')
+            self._calculate_and_print_stats(df_feature, "Features", stat_type='feature')
             self._calculate_and_print_stats(df_label, "Labels", stat_type='label')
 
-        self.data_normalized = df_normalized.values
+        self.data_feature = df_feature.values
         data_label_raw = df_label.values
         self.obsids = shuffled_obsids
 
@@ -57,15 +69,15 @@ class Dataset_Spectral(Dataset):
         if self.flag == 'train':
             if self.show_stats:
                 print("Statistics for scaled training data:")
-                self._calculate_and_print_stats(pd.DataFrame(self.data_normalized), "Normalized Spectra", stat_type='feature')
+                self._calculate_and_print_stats(pd.DataFrame(self.data_feature), "Features", stat_type='feature')
                 self._calculate_and_print_stats(pd.DataFrame(self.data_label), "Labels", stat_type='label')
             
             if self.transform:
-                self.data_normalized = self.transform(self.data_normalized)
+                self.data_feature = self.transform(self.data_feature)
                 print(f"Applied training data augmentations: {self.transform.aval_name}")
 
         print(f"[{self.__class__.__name__}] flag: {self.flag}")
-        print(f"normalized shape: {self.data_normalized.shape}, label shape: {self.data_label.shape}")
+        print(f"feature shape: {self.data_feature.shape}, label shape: {self.data_label.shape}")
 
     def _calculate_and_print_stats(self, df, name, stat_type='label'):
         """
@@ -87,24 +99,19 @@ class Dataset_Spectral(Dataset):
         print("---------------------------------")
 
     def __getitem__(self, index):
-        seq_x_normalized = self.data_normalized[index].copy()
+        seq_x_feature = self.data_feature[index]
         
         # 使用 np.stack 将同一个归一化谱复制为两个通道，以适配双分支模型输入
-        #x_combined = np.stack([seq_x_normalized, seq_x_normalized], axis=-1)
+        #x_combined = np.stack([seq_x_feature, seq_x_feature], axis=-1)
 
         seq_y = self.data_label[index]
         obsid = self.obsids[index]
 
         # 转换为Tensor
-        x_combined = torch.from_numpy(seq_x_normalized).float() # 最终形状: [L, 2]
+        x_combined = torch.from_numpy(seq_x_feature).float() # 最终形状: [L, 2]
         seq_y = torch.from_numpy(seq_y).float()
             
         return x_combined, seq_y, obsid
 
     def __len__(self):
         return len(self.data_label)
-
-    def inverse_transform_label(self, data):
-        if self.label_scaler:
-            return self.label_scaler.inverse_transform(data)
-        return data
