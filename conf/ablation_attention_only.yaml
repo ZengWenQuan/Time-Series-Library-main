@@ -5,7 +5,7 @@ global_settings:
 
 # --- 训练、分支与头模块选择 ---
 training_name: 'mse_cos'
-#continuum_branch_name: 'GlobalAttentionBranch'
-normalized_branch_name: 'MultiScaleConvBranch'
+#global_branch_name: 'GlobalAttentionBranch'
+local_branch_name: 'MultiScaleConvBranch'
 fusion_name: 'add'
 head_name: 'DecoderHead'

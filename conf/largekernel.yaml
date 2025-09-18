@@ -16,8 +16,8 @@ training_settings:
   mixed_precision: True
 
 # --- Branch & Head Module Selection ---
-continuum_branch_name: 'LargeKernelBranch'
-normalized_branch_name: 'UpsampleMultiScaleBranch'
+global_branch_name: 'LargeKernelBranch'
+local_branch_name: 'UpsampleMultiScaleBranch'
 # Using ConcatFusion to handle vector + sequence fusion
 fusion_name: 'ConcatFusion' 
 head_name: 'MultiTaskHead'

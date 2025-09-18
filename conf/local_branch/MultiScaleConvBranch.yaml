@@ -1,3 +1,4 @@
+name : MultiScaleConvBranch
 input_dim: 1
 num_layers: 2
 layer_configs:

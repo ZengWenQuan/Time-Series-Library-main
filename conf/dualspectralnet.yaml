@@ -1,8 +1,8 @@
 # DualSpectralNet 配置文件 (v4, 使用分支、融合和头注册机制)
 
 # --- 分支、融合与头模块选择 ---
-continuum_branch_name: 'CNNTransformerBranch'
-normalized_branch_name: 'MultiScaleCNNBranch'
+global_branch_name: 'CNNTransformerBranch'
+local_branch_name: 'MultiScaleCNNBranch'
 fusion_name: 'CrossAttentionFusion'
 head_name: 'SimpleFFN_Head'
 

@@ -4,7 +4,7 @@ from ...registries import register_head
 from .fusion_modules import FeatureAdjuster
 
 @register_head
-class LstmFfnHead(nn.Module):
+class LstmFfnHead_old(nn.Module):
     """
     一个使用双向LSTM和FFN的预测头。
 

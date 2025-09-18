@@ -14,10 +14,10 @@ model: MPFiLM
 training_name: mse_cos
 
 # 连续谱分支模块
-continuum_branch_name: MicnBranch
+global_branch_name: MicnBranch
 
 # 归一化谱分支模块
-normalized_branch_name: PatchTstBranch
+local_branch_name: PatchTstBranch
 
 # 融合模块
 fusion_name: FilmFusion

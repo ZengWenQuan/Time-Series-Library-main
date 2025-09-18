@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ...registries import register_continuum_branch
-from ..normalized_branches.multiscale_pyramid_branch import MultiScalePyramidBranch
+from ..local_branches.multiscale_pyramid_branch import MultiScalePyramidBranch
 
 class FrequencyFeatureExtractor(nn.Module):
     """封装频域特征提取逻辑"""

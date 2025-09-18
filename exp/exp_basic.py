@@ -58,34 +58,34 @@ class Exp_Basic(object):
 
         try:
             # 1. Load and merge all YAML files into one dictionary
-            model_config = self._load_and_merge_configs(self.args.model_conf)
-
+            self.model_config = self._load_and_merge_configs(self.args.model_conf)
+            print(self.model_config)
             # 2. Save the merged dictionary to a new temporary file inside the run directory
-            merged_config_path = os.path.join(self.args.run_dir, 'merged_model_conf.yaml')
+            merged_config_path = os.path.join(self.args.run_dir,f'{ self.model_config['name']}.yaml')
             with open(merged_config_path, 'w') as f:
-                yaml.dump(model_config, f, sort_keys=False, default_flow_style=False, indent=2)
+                yaml.dump(self.model_config, f, sort_keys=False, default_flow_style=False, indent=2)
             
             # 3. CRITICAL: Overwrite args.model_conf to point to the new, complete file
             self.args.model_conf = merged_config_path
             self.logger.info(f"Modular configs merged and saved to: {merged_config_path}")
 
             # 4. Populate args with the full config for other potential uses
-            for key, value in model_config.items():
+            for key, value in self.model_config.items():
                 if not hasattr(self.args, key):
                     setattr(self.args, key, value)
 
             # 5. Continue with setup using the merged config
-            training_settings = model_config.get('training_settings', {})
+            training_settings = self.model_config.get('training_settings', {})
             
             if 'targets' in training_settings:
                 self.targets = training_settings['targets']
                 self.args.targets = self.targets
+                self.model_config['targets']=self.targets
             else:
                 raise ValueError(f"The 'targets' key must be provided in the training_settings.")
 
             self.args.loss = training_settings.get('loss_function', 'mse')
             self.args.lradj = training_settings.get('lradj', 'cos')
-            self.args.loss_weights = training_settings.get('loss_weights', [1.0, 1.0, 1.0, 1.0])
             self.args.use_amp = training_settings.get('mixed_precision', True)
 
         except Exception as e:
@@ -117,8 +117,9 @@ class Exp_Basic(object):
         # Define the mapping from the name in the main config to the subdirectory and the final key
         module_mapping = {
             'training_name': ('training', 'training_settings'),
-            'continuum_branch_name': ('continuum_branch', 'continuum_branch_config'),
-            'normalized_branch_name': ('normalized_branch', 'normalized_branch_config'),
+            'backbone_name': ('backbone', 'backbone_config'),
+            'global_branch_name': ('global_branch', 'global_branch_config'),
+            'local_branch_name': ('local_branch', 'local_branch_config'),
             'fusion_name': ('fusion', 'fusion_config'),
             'head_name': ('head', 'head_config'),
         }
@@ -154,15 +155,15 @@ class Exp_Basic(object):
         # 此函数不再有返回值
 
     def _build_model(self, sample_batch=None):
-        model_class = MODEL_REGISTRY.get(self.args.model)
+        model_class = MODEL_REGISTRY.get(self.model_config['name'])
         if model_class is None:
             raise ValueError(f"Model '{self.args.model}' is not registered. "
                              f"Available models: {list(MODEL_REGISTRY.keys())}")
         
-        self.logger.info(f"Building model: {self.args.model}")
+        self.logger.info(f"Building model: {self.model_config['name']}")
         # Add sample_batch to the config object, which is used by the model's __init__
         self.args.sample_batch = sample_batch
-        model = model_class(self.args).float()
+        model = model_class(self.model_config).float()
         model.to(self.device)
 
         # --- ADDED: Load pre-trained model for finetuning ---
@@ -217,7 +218,7 @@ class Exp_Basic(object):
 
             else: # Fallback to old method if profiling function doesn't exist or failed
                 f.write("  (Profiling function not available or failed, using parameter count fallback)")
-                submodule_attrs = ['continuum_branch', 'normalized_branch', 'fusion', 'prediction_head']
+                submodule_attrs = ['backbone', 'global_branch', 'local_branch', 'fusion', 'prediction_head']
                 for attr in submodule_attrs:
                     if hasattr(model_to_inspect, attr):
                         submodule = getattr(model_to_inspect, attr)

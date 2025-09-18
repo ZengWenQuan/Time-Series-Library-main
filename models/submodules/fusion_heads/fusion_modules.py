@@ -32,18 +32,22 @@ class add(nn.Module):
         if 'target_shape' not in config:
             raise ValueError("Fusion config must contain 'target_shape'")
         
-        target_channels = config['target_shape']['channels']
-        target_length = config['target_shape']['length']
+        self.output_channels = config['target_shape']['channels']
+        self.output_length = config['target_shape']['length']
+        
+        self.adjuster_local = FeatureAdjuster(self.output_channels, self.output_length)
+        self.adjuster_global = FeatureAdjuster(self.output_channels, self.output_length)
 
-        self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
-        self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
-        self.output_channels = target_channels
-        self.output_length = target_length
-
-    def forward(self, features_norm, features_cont):
-        features_norm = self.adjuster_norm(features_norm)
-        features_cont = self.adjuster_cont(features_cont)
-        return features_norm + features_cont
+    def forward(self, features_local=None, features_global=None):
+        if features_local is not None:
+            features_local = self.adjuster_local(features_local)
+        if features_global is not None :
+            features_gloals = self.adjuster_global(features_global)
+        if features_gloals is not None  and features_local  is not None :
+            return features_local + features_global
+        if features_local  is not None :return features_local
+        if features_global  is not None :return features_global  
+        return None
 
 @register_fusion
 class concat(nn.Module):
@@ -56,21 +60,24 @@ class concat(nn.Module):
         if 'target_shape' not in config:
             raise ValueError("Fusion config must contain 'target_shape'")
         
-        target_channels = config['target_shape']['channels']
-        target_length = config['target_shape']['length']
-
-        self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
-        self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
+        self.output_channels = config['target_shape']['channels']
+        self.output_length = config['target_shape']['length']
         
-        concatenated_channels = target_channels * 2
-        self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=target_channels, kernel_size=1)
-        self.output_channels = target_channels
-        self.output_length = target_length
+        self.adjuster_local = FeatureAdjuster(self.output_channels, self.output_length)
+        self.adjuster_global = FeatureAdjuster(self.output_channels, self.output_length)
+        
+        concatenated_channels = self.output_channels * 2
+        self.fusion_conv = nn.Conv1d(in_channels=concatenated_channels, out_channels=self.output_channels, kernel_size=1)
 
-    def forward(self, features_norm, features_cont):
-        features_norm = self.adjuster_norm(features_norm)
-        features_cont = self.adjuster_cont(features_cont)
-        return self.fusion_conv(torch.cat([features_norm, features_cont], dim=1))
+    def forward(self, features_local, features_global):
+        if features_local is not None : features_local = self.adjuster_local(features_local)
+        if features_global is not None : features_global = self.adjuster_global(features_global)
+        
+        if features_global  is not None and features_local  is not None :
+            return self.fusion_conv(torch.cat([features_local, features_global], dim=1))
+        if features_local  is not None :return features_local
+        if features_global  is not None :return features_global  
+        return None
 
 @register_fusion
 class crossion_attention(nn.Module):
@@ -83,29 +90,33 @@ class crossion_attention(nn.Module):
         if 'target_shape' not in config:
             raise ValueError("Fusion config must contain 'target_shape'")
         
-        target_channels = config['target_shape']['channels']
-        target_length = config['target_shape']['length']
+        self.outpu_channels = config['target_shape']['channels']
+        self.output_length = config['target_shape']['length']
         num_heads = config.get('attention_heads', 4)
 
-        self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
-        self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
+        self.adjuster_local = FeatureAdjuster(self.outpu_channels, self.output_length)
+        self.adjuster_global = FeatureAdjuster(self.outpu_channels, self.output_length)
         
-        self.attention = nn.MultiheadAttention(embed_dim=target_channels, num_heads=num_heads, batch_first=True)
-        self.output_channels = target_channels # 遵循风格
-        self.output_length = target_length
+        self.attention = nn.MultiheadAttention(embed_dim=self.outpu_channels, num_heads=num_heads, batch_first=True)
 
-    def forward(self, features_norm, features_cont):
-        features_norm = self.adjuster_norm(features_norm)
-        features_cont = self.adjuster_cont(features_cont)
+    def forward(self, features_local=None, features_global=None):
+        if features_local is not None :
+            features_local = self.adjuster_local(features_local)
+        if features_global is not None :
+            features_global = self.adjuster_global(features_global)
         
-        query = features_norm.permute(0, 2, 1)
-        key = features_cont.permute(0, 2, 1)
-        value = features_cont.permute(0, 2, 1)
-        
-        attended_output, _ = self.attention(query, key, value)
-        return attended_output.permute(0, 2, 1)
+        if features_global  is not None and features_local is not None :
+            query = features_local.permute(0, 2, 1)
+            key = features_global.permute(0, 2, 1)
+            value = features_global.permute(0, 2, 1)
+            
+            attended_output, _ = self.attention(query, key, value)
+            return attended_output.permute(0, 2, 1)
+        if features_local  is not None :return features_local
+        if features_global  is not None :return features_global  
+        return None
 
-# --- 新增的融合模块 ---
+# --- 新增的融合模块 ---+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++下面的暂时不使用
 
 @register_fusion
 class FilmFusion(nn.Module):
@@ -118,15 +129,15 @@ class FilmFusion(nn.Module):
         if 'target_shape' not in config:
             raise ValueError("Fusion config must contain 'target_shape'")
         
-        target_channels = config['target_shape']['channels']
-        target_length = config['target_shape']['length']
+        self.outpu_channels = config['target_shape']['channels']
+        self.output_length = config['target_shape']['length']
         self.controller_branch = config.get('controller_branch', 'continuum')
 
-        self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
-        self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
+        self.adjuster_norm = FeatureAdjuster(self.outpu_channels, self.output_length)
+        self.adjuster_cont = FeatureAdjuster(self.outpu_channels, self.output_length)
 
-        ffn_dims = config.get('ffn_dims', [target_channels, target_channels * 2])
-        controller_input_dim = target_channels * target_length
+        ffn_dims = config.get('ffn_dims', [self.outpu_channels, self.outpu_channels * 2])
+        controller_input_dim = self.outpu_channels * self.output_length
         
         layers = []
         current_dim = controller_input_dim
@@ -134,23 +145,23 @@ class FilmFusion(nn.Module):
             layers.append(nn.Linear(current_dim, hidden_dim))
             layers.append(nn.ReLU(inplace=True))
             current_dim = hidden_dim
-        layers.append(nn.Linear(current_dim, target_channels * 2)) # *2 for gamma and beta
+        layers.append(nn.Linear(current_dim, self.outpu_channels * 2)) # *2 for gamma and beta
         self.controller_mlp = nn.Sequential(*layers)
 
-        self.output_channels = target_channels
-        self.output_length = target_length
-        self.output_dim = target_channels
+        self.output_channels = self.outpu_channels
+        self.output_length = self.output_length
+        self.output_dim = self.outpu_channels
 
-    def forward(self, features_norm, features_cont):
-        features_norm = self.adjuster_norm(features_norm)
-        features_cont = self.adjuster_cont(features_cont)
+    def forward(self, features_local, features_global):
+        features_local = self.adjuster_norm(features_local)
+        features_global = self.adjuster_cont(features_global)
 
         if self.controller_branch == 'continuum':
-            controller_features = features_cont
-            modulated_features = features_norm
+            controller_features = features_global
+            modulated_features = features_local
         else:
-            controller_features = features_norm
-            modulated_features = features_cont
+            controller_features = features_local
+            modulated_features = features_global
 
         B, C, L = controller_features.shape
         controller_flat = controller_features.view(B, -1)
@@ -175,13 +186,13 @@ class GruFusion(nn.Module):
         if 'target_shape' not in config:
             raise ValueError("Fusion config must contain 'target_shape'")
         
-        target_channels = config['target_shape']['channels']
-        target_length = config['target_shape']['length']
+        self.outpu_channels = config['target_shape']['channels']
+        self.output_length = config['target_shape']['length']
 
-        self.adjuster_norm = FeatureAdjuster(target_channels, target_length)
-        self.adjuster_cont = FeatureAdjuster(target_channels, target_length)
+        self.adjuster_norm = FeatureAdjuster(self.outpu_channels, self.output_length)
+        self.adjuster_cont = FeatureAdjuster(self.outpu_channels, self.output_length)
 
-        gru_input_size = target_channels * 2
+        gru_input_size = self.outpu_channels * 2
         hidden_size = config.get('hidden_size', 128)
         num_layers = config.get('num_layers', 1)
         dropout = config.get('dropout_rate', 0.1)
@@ -196,17 +207,17 @@ class GruFusion(nn.Module):
         )
 
         # The output of BiGRU is 2*hidden_size, we use a conv to map it back
-        self.output_conv = nn.Conv1d(hidden_size * 2, target_channels, kernel_size=1)
+        self.output_conv = nn.Conv1d(hidden_size * 2, self.outpu_channels, kernel_size=1)
 
-        self.output_channels = target_channels
-        self.output_length = target_length
-        self.output_dim = target_channels
+        self.output_channels = self.outpu_channels
+        self.output_length = self.output_length
+        self.output_dim = self.outpu_channels
 
-    def forward(self, features_norm, features_cont):
-        features_norm = self.adjuster_norm(features_norm)
-        features_cont = self.adjuster_cont(features_cont)
+    def forward(self, features_local, features_global):
+        features_local = self.adjuster_norm(features_local)
+        features_global = self.adjuster_cont(features_global)
 
-        x = torch.cat([features_norm, features_cont], dim=1) # -> [B, 2*C, L]
+        x = torch.cat([features_local, features_global], dim=1) # -> [B, 2*C, L]
         x = x.permute(0, 2, 1) # -> [B, L, 2*C]
 
         gru_out, _ = self.gru(x)

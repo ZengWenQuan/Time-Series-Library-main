@@ -1,8 +1,8 @@
 # FreqInceptionNet 配置文件 (v2, 标准化结构)
 
 # --- 分支、融合与头模块选择 ---
-continuum_branch_name: 'FrequencyBranch'
-normalized_branch_name: 'InceptionBranch'
+global_branch_name: 'FrequencyBranch'
+local_branch_name: 'InceptionBranch'
 fusion_name: 'GeneralFusion'
 head_name: 'SimpleLSTM_FFN_Head'
 

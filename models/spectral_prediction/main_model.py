@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import yaml
 
-from ..registries import     register_model
+from ..registries import register_model
 from .GenericSpectralModel import GenericSpectralModel
 
 @register_model
@@ -13,6 +13,7 @@ class DualBranchMoENet(GenericSpectralModel):
 @register_model
 class DualSpectralNet(GenericSpectralModel):
     pass
+
 @register_model
 class LargeKernelConvNet(GenericSpectralModel):
     pass
@@ -20,6 +21,7 @@ class LargeKernelConvNet(GenericSpectralModel):
 @register_model
 class CustomFusionNet(GenericSpectralModel):
     pass
+
 @register_model
 class FlexibleFusionNet(GenericSpectralModel):
     """
@@ -64,3 +66,6 @@ class AMFN(GenericSpectralModel):
     - Head: DecoderHead
     """
     pass
+
+# 注意：DualBranchSpectralModel 类已经在自己的文件中定义并注册了
+# 这里不需要重复定义

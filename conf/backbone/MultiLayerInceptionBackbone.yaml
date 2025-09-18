@@ -1,0 +1,41 @@
+# @conf/backbone/MultiLayerInceptionBackbone.yaml
+
+# Backbone 的类名
+name: MultiLayerInceptionBackbone
+
+# 输入通道数（对于光谱数据通常是1或2）
+input_channels: 1
+input_length: 4800
+
+# 是否使用全局特征融合和通道注意力
+global_fusion: true
+
+# 多层inception网络配置
+layers:
+  # 第一层：初始特征提取
+  - name: MultiScaleInception
+    out_channels: 64
+    kernel_sizes: [3, 5, 7, 11]
+    pooling:
+      kernel_size: 2
+      stride: 2
+      padding: 0
+
+  # 第二层：中级特征提取
+  - name: MultiScaleInception
+    out_channels: 128
+    kernel_sizes: [3, 5, 7, 9]
+    pooling:
+      kernel_size: 2
+      stride: 2
+      padding: 0
+
+  # 第三层：高级特征提取
+  - name: MultiScaleInception
+    out_channels: 256
+    kernel_sizes: [3, 5, 7]
+
+  # 第四层：最终特征压缩
+  - name: MultiScaleInception
+    out_channels: 128
+    kernel_sizes: [3, 5]

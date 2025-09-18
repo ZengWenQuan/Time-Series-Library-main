@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ...registries import register_continuum_branch
+from ..registries import register_block
 
-@register_continuum_branch
+@register_block
 class GlobalAttentionBranch(nn.Module):
     """
     A branch that first patches the input sequence and then uses a Transformer Encoder.
@@ -21,7 +21,7 @@ class GlobalAttentionBranch(nn.Module):
         num_encoder_layers = config.get('num_encoder_layers', 2)
         dim_feedforward = config.get('dim_feedforward', 128)
         dropout = config.get('dropout', 0.1)
-        input_len = config['input_len']
+        input_len = config['input_length']
 
         self.patch_size = patch_size
         self.patch_stride = patch_stride

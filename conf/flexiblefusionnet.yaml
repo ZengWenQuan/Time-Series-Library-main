@@ -17,7 +17,7 @@ global_settings:
 
 # --- 训练、分支与头模块选择 ---
 training_name: 'mse_cos' # 新增：指向训练配置文件
-continuum_branch_name: 'CustomAttentiveBranch'
-normalized_branch_name: 'MultiScalePyramidBranch'
+global_branch_name: 'CustomAttentiveBranch'
+local_branch_name: 'MultiScalePyramidBranch'
 fusion_name: 'add'
 head_name: 'MultiTaskHead'

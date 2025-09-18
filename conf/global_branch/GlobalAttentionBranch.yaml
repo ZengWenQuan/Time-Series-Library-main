@@ -1,0 +1,39 @@
+# @conf/global_branch/GlobalAttentionBranch.yaml
+
+# 模块的类名
+name: GlobalBranch
+
+# === 基础输入输出参数 ===
+in_channels: 128  # 从backbone输出的通道数
+out_channels: 64  # 输出通道数
+
+# === 注意力机制配置 ===
+attention_dim: 128     # 注意力机制的特征维度
+n_heads: 8            # 多头注意力的头数
+use_positional_encoding: true  # 是否使用位置编码
+max_length: 2000      # 最大序列长度（用于位置编码）
+
+# === 多层CNN配置 ===
+cnn_layers:
+  # 第一层：特征提取
+  - in_channels: 64
+    out_channels: 64
+    kernel_size: 3
+    stride: 1
+
+  # 第二层：多尺度感受野
+  - in_channels: 64
+    out_channels: 64
+    kernel_size: 5
+    stride: 1
+
+  # 第三层：降采样和特征压缩
+  - in_channels: 64
+    out_channels: 64
+    kernel_size: 3
+    stride: 2
+
+# === 全局配置参数继承 ===
+# 这些参数将从global_settings中继承：
+# use_batch_norm: true/false  # 是否在CNN中使用BatchNorm
+# dropout_rate: 0.1           # Dropout比率

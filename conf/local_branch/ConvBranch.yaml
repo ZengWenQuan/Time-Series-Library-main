@@ -1,0 +1,21 @@
+# @conf/local_branch/ConvBranch.yaml
+
+# 模块的类名
+name: LocalBranch
+
+# 多层CNN配置
+layer_configs:
+  # 第一层：局部特征提取
+  - out_channels: 64
+    kernel_size: 3
+    stride: 1
+
+  # 第二层：多尺度特征提取
+  - out_channels: 64
+    kernel_size: 5
+    stride: 1
+
+  # 第三层：特征压缩和降采样
+  - out_channels: 64
+    kernel_size: 3
+    stride: 2

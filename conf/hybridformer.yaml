@@ -7,8 +7,8 @@ model: HybridFormer
 
 # --- 2. 模块选择 ---
 training_name: mse_cos
-continuum_branch_name: CnnTransformerBranch
-normalized_branch_name: PatchTstBranch
+global_branch_name: CnnTransformerBranch
+local_branch_name: PatchTstBranch
 fusion_name: GruFusion
 head_name: DecoderHead
 

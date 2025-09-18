@@ -17,7 +17,7 @@ global_settings:
 
 # --- 训练、分支与头模块选择 ---
 training_name: 'mse_cos'
-# normalized_branch_name: 'NormalizedSpectrumBranch' # <-- 消融掉
-continuum_branch_name: 'ContinuumWaveletBranch'
+# local_branch_name: 'NormalizedSpectrumBranch' # <-- 消融掉
+global_branch_name: 'ContinuumWaveletBranch'
 # fusion_name: 'FusionModule' # <-- 消融掉
 head_name: 'MultiTaskHead'

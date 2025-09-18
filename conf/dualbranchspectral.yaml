@@ -1,0 +1,34 @@
+# DualBranchSpectralModel 配置文件
+name : DualBranchSpectralModel
+# --- 定义可复用的锚点 ---
+anchor_vars:
+  input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整
+  pred_len: &pred_l 4
+  input_channels: &input_c 1
+
+# --- 全局模型设置 ---
+global_settings:
+  input_length: *input_l
+  pred_len: *pred_l
+  input_channels: *input_c
+  use_batch_norm: true
+  dropout_rate: 0.1
+
+# --- 训练、主干、分支与头模块选择 ---
+# 通过这里的名字，让 run.py 去加载对应的配置文件和模块
+
+# 1. 训练循环的名称 (例如，对应 conf/training/mse_cos.yaml)
+training_name: 'mse_cos'
+
+# 2. 主干网络的名称 (对应 conf/backbone/MultiLayerInceptionBackbone.yaml 和注册的类)
+backbone_name: 'MultiLayerInceptionBackbone'
+
+# 3. 分支的名称 (对应 conf/global_branch/ 和 conf/local_branch/ 下的文件)
+global_branch_name: 'GlobalAttentionBranch'
+local_branch_name: 'ConvBranch'
+
+# 4. 融合模块名称 (可选，如果没有则使用默认的拼接方式)
+fusion_name: 'add'
+
+# 5. 预测头的名称 (对应 conf/head/LstmFfnHead.yaml 和注册的类)
+head_name: 'LstmFfnHead'

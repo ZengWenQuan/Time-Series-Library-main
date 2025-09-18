@@ -90,13 +90,13 @@ class Dataset_Spectral(Dataset):
         seq_x_normalized = self.data_normalized[index].copy()
         
         # 使用 np.stack 将同一个归一化谱复制为两个通道，以适配双分支模型输入
-        x_combined = np.stack([seq_x_normalized, seq_x_normalized], axis=-1)
+        #x_combined = np.stack([seq_x_normalized, seq_x_normalized], axis=-1)
 
         seq_y = self.data_label[index]
         obsid = self.obsids[index]
 
         # 转换为Tensor
-        x_combined = torch.from_numpy(x_combined).float() # 最终形状: [L, 2]
+        x_combined = torch.from_numpy(seq_x_normalized).float() # 最终形状: [L, 2]
         seq_y = torch.from_numpy(seq_y).float()
             
         return x_combined, seq_y, obsid
