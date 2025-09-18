@@ -260,7 +260,6 @@ class Exp_Basic(object):
     def _get_data(self):
         self.train_data, self.train_loader =None
         self.vali_data, self.vali_loader = None
-        self.test_data, self.test_loader =None
         raise NotImplementedError("Subclasses must implement _get_data()")
 
     def _get_finetune_data(self):
@@ -326,8 +325,6 @@ class Exp_Basic(object):
         metrics_sets = [
             ("train", train_metrics),
             ("val", vali_metrics),
-            ("test", test_metrics),
-            ("combined", combined_metrics)
         ]
         # self.logger.info(f"Epoch {epoch + 1}: Logging per-label MAE to MLflow...")
         for phase, metrics_dict in metrics_sets:
@@ -408,24 +405,12 @@ class Exp_Basic(object):
             train_loss_avg = np.average(train_loss)
             vali_loss, vali_preds, vali_trues,_ = self.vali(self.vali_data, self.vali_loader, criterion)
 
-            if self.test_loader:
-                test_loss, test_preds, test_trues ,_ = self.vali(self.test_data, self.test_loader, criterion)
-            else:
-                test_loss, test_preds, test_trues = None, None, None
-
             train_eval_loss, train_preds, train_trues ,_ = self.vali(self.train_data, self.train_loader, criterion)
 
             # --- Metric Processing ---
             train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
             vali_reg_metrics = self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "latest")
-            if self.test_loader:
-                test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
             
-            if test_preds is not None:
-                combined_preds = np.concatenate([vali_preds, test_preds])
-                combined_trues = np.concatenate([vali_trues, test_trues])
-                combined_reg_metrics = self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "latest")
-
             # --- Logging and History ---
             avg_grad_norm = np.mean(epoch_grad_norms)
             cost_time = time.time() - epoch_time
@@ -439,7 +424,6 @@ class Exp_Basic(object):
             formatted_eta = format_duration(remaining_time)
 
             log_msg = f"Epoch: {epoch + 1} /{self.args.train_epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
-            if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
             log_msg += f" | Time: {formatted_cost_time} | ETA: {formatted_eta}"
             
@@ -448,8 +432,6 @@ class Exp_Basic(object):
                 #self.logger.info(f"--- Detailed Metrics @ Epoch {epoch + 1} ---")
                 if train_reg_metrics: print(f"train Metrics:\n{format_metrics(train_reg_metrics)}")
                 if vali_reg_metrics: print(f"Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
-                if locals().get('test_reg_metrics',None): print(f"Test Metrics:\n{format_metrics(test_reg_metrics)}")
-                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None: print(f"Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
 
             # --- Early Stopping & Best Model Checkpoint Saving ---
             prev_best_loss = early_stopping.val_loss_min
@@ -458,10 +440,7 @@ class Exp_Basic(object):
                 self.logger.info(f"New best validation loss: {vali_loss:.4f}. Model checkpoint saved.")
 
             # --- User's Logic: Save metric files if combined FeH_mae is the best so far ---
-            if 'combined_reg_metrics' in locals() and combined_reg_metrics and 'FeH_mae' in combined_reg_metrics:
-                current_feh_mae = combined_reg_metrics['FeH_mae']
-            else:
-                current_feh_mae= vali_reg_metrics['FeH_mae']
+            current_feh_mae= vali_reg_metrics['FeH_mae']
             if current_feh_mae < best_feh_mae:
                 best_feh_mae = current_feh_mae
                 torch.save(self.model.state_dict(), chechpoint_path + '/' + 'best.pth')
@@ -469,9 +448,6 @@ class Exp_Basic(object):
                 self.logger.info(f"New best  FeH MAE: {best_feh_mae:.4f}. Saving metrics for this epoch as 'best'...")
                 self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")
                 self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "best")
-                if test_preds is not None:
-                    self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "best")
-                    self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "best")
 
             if early_stopping.early_stop: break
             if scheduler is not None: scheduler.step() 
@@ -493,14 +469,6 @@ class Exp_Basic(object):
         os.makedirs(finetune_dir, exist_ok=True)
         self.logger.info(f"--- Starting Finetuning ---")
         self.logger.info(f"Finetuning outputs will be saved in: {finetune_dir}")
-
-        # --- Load Best Pre-trained Model ---
-        # pretrained_checkpoint_path = os.path.join(original_run_dir, 'checkpoints', 'best.pth')
-        # if os.path.exists(pretrained_checkpoint_path):
-        #     self.logger.info(f"Loading best model from pre-training for finetuning: {pretrained_checkpoint_path}")
-        #     self.model.load_state_dict(torch.load(pretrained_checkpoint_path, map_location=self.device), strict=False)
-        # else:
-        #     self.logger.warning("No best pre-trained model found. Finetuning from the current model state.")
 
         # --- ADDED: Evaluate model on full dataset BEFORE finetuning ---
         self.logger.info("--- Starting evaluation on full dataset before finetuning ---")
@@ -525,12 +493,6 @@ class Exp_Basic(object):
             _, vali_preds, vali_trues, _ = self.vali(self.vali_data, self.vali_loader, criterion)
             self.logger.info("Calculating and saving metrics for VALIDATION set before finetuning...")
             self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "pre_finetune")
-
-        # --- Evaluate on Test Set ---
-        if self.test_loader:
-            _, test_preds, test_trues, _ = self.vali(self.test_data, self.test_loader, criterion)
-            self.logger.info("Calculating and saving metrics for TEST set before finetuning...")
-            self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "pre_finetune")
 
         # Restore original finetune run_dir
         self.args.run_dir = original_finetune_dir
@@ -593,23 +555,11 @@ class Exp_Basic(object):
             train_loss_avg = np.average(train_loss)
             vali_loss, vali_preds, vali_trues, _ = self.vali(self.finetune_vali_data, self.finetune_vali_loader, criterion) # Use finetune data
 
-            if hasattr(self, 'finetune_test_loader') and self.finetune_test_loader:
-                test_loss, test_preds, test_trues, _ = self.vali(self.finetune_test_data, self.finetune_test_loader, criterion) # Use finetune data
-            else:
-                test_loss, test_preds, test_trues = None, None, None
-
             train_eval_loss, train_preds, train_trues, _ = self.vali(self.finetune_train_data, self.finetune_train_loader, criterion) # Use finetune data
 
             # --- Metric Processing (will use the new self.args.run_dir) ---
             train_reg_metrics = self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "latest")
             vali_reg_metrics = self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "latest")
-            if test_preds is not None:
-                test_reg_metrics = self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "latest")
-            
-            if test_preds is not None:
-                combined_preds = np.concatenate([vali_preds, test_preds])
-                combined_trues = np.concatenate([vali_trues, test_trues])
-                combined_reg_metrics = self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "latest")
 
             # --- Logging and History ---
             avg_grad_norm = np.mean(epoch_grad_norms)
@@ -624,15 +574,12 @@ class Exp_Basic(object):
             formatted_eta = format_duration(remaining_time)
 
             log_msg = f"Finetune Epoch: {epoch + 1} /{epochs} | Train Loss: {train_loss_avg:.4f} | Vali Loss: {vali_loss:.4f}"
-            if test_loss is not None: log_msg += f" | Test Loss: {test_loss:.4f}"
             log_msg += f" | Grad: {avg_grad_norm:.4f} | LR: {current_lr:.6f}"
             log_msg += f" | Time: {formatted_cost_time} | ETA: {formatted_eta}"
             
             if (epoch + 1) % self.args.vali_interval == 0:
                 if train_reg_metrics: print(f"Finetune Train Metrics:\n{format_metrics(train_reg_metrics)}")
                 if vali_reg_metrics: print(f"Finetune Validation Metrics:\n{format_metrics(vali_reg_metrics)}")
-                if locals().get('test_reg_metrics',None): print(f"Finetune Test Metrics:\n{format_metrics(test_reg_metrics)}")
-                if 'combined_reg_metrics' in locals() and combined_reg_metrics is not None: print(f"Finetune Combined Val/Test Metrics:\n{format_metrics(combined_reg_metrics)}")
 
             # --- Early Stopping & Best Model Checkpoint Saving ---
             prev_best_loss = early_stopping.val_loss_min
@@ -640,10 +587,7 @@ class Exp_Basic(object):
             if vali_loss < prev_best_loss:
                 self.logger.info(f"New best finetune validation loss: {vali_loss:.4f}. Model checkpoint saved.")
 
-            if 'combined_reg_metrics' in locals() and combined_reg_metrics and 'FeH_mae' in combined_reg_metrics:
-                current_feh_mae = combined_reg_metrics['FeH_mae']
-            else:
-                current_feh_mae = vali_reg_metrics['FeH_mae']
+            current_feh_mae = vali_reg_metrics['FeH_mae']
             if current_feh_mae < best_feh_mae:
                 best_feh_mae = current_feh_mae
                 torch.save(self.model.state_dict(), chechpoint_path + '/' + 'best.pth')
@@ -651,9 +595,6 @@ class Exp_Basic(object):
                 self.logger.info(f"New best finetune FeH MAE: {best_feh_mae:.4f}. Saving metrics for this epoch as 'best'...")
                 self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")
                 self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "best")
-                if test_preds is not None:
-                    self.calculate_and_save_all_metrics(test_preds, test_trues, "test", "best")
-                    self.calculate_and_save_all_metrics(combined_preds, combined_trues, "combined_val_test", "best")
 
             if early_stopping.early_stop: break
             if scheduler is not None: scheduler.step() 
@@ -730,7 +671,6 @@ class Exp_Basic(object):
         dataset_splits = {
             'train': (self.train_data, self.train_loader),
             'val': (self.vali_data, self.vali_loader),
-            'test': (self.test_data, self.test_loader)
         }
 
         for split_name, (data, loader) in dataset_splits.items():

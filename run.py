@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_ratio', type=str, default='[0.8, 0.1, 0.1]', help='Train/validation/test split ratio as a list string')
     parser.add_argument('--show_stats', action='store_true', help='Whether to show statistics of data during loading')
     parser.add_argument('--continuum_filename', type=str, default='continuum.csv', help='Filename for the continuum spectra data')
-    parser.add_argument('--normalized_filename', type=str, default='normalized.csv', help='Filename for the normalized spectra data')
+    parser.add_argument('--feature_filename', type=str, default='feature.csv', help='Filename for the normalized spectra data')
     parser.add_argument('--labels_filename', type=str, default='labels.csv', help='Filename for the labels data')
 
     # --- Task-Specific Config ---

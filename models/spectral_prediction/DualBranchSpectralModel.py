@@ -150,8 +150,7 @@ class DualBranchSpectralModel(nn.Module):
 
     def forward(self, x):
         # --- Backbone Forward Pass (if exists) ---
-        if x.dim==2:
-            x = x.unsqueeze(1)
+        x = x.unsqueeze(1)
         if self.backbone:
             backbone_output = self.backbone(x)
         else :

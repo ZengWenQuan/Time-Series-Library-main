@@ -22,7 +22,6 @@ class MultiLayerInceptionBackbone(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
-        self.input_channels = cfg['input_channels']
         self.layers = nn.ModuleList()
         self.layer_configs = cfg['layers']
 
@@ -35,7 +34,7 @@ class MultiLayerInceptionBackbone(nn.Module):
         for i, layer_cfg in enumerate(self.layer_configs):
             # 第一层的输入通道数是原始输入
             if i == 0:
-                layer_cfg['in_channels'] = 1
+                layer_cfg['in_channels'] = cfg['input_channels']
             else:
                 # 后续层的输入通道数是前一层的输出通道数
                 layer_cfg['in_channels'] = self.layer_configs[i-1]['out_channels']
