@@ -46,16 +46,16 @@ class GlobalBranch(nn.Module):
         # 基础参数
         self.in_channels = cfg['in_channels']
         self.out_channels = cfg['out_channels']
-        self.use_batch_norm = getattr(cfg, 'use_batch_norm', True)
-        self.dropout_rate = getattr(cfg, 'dropout_rate', 0.1)
+        self.use_batch_norm =cfg['use_batch_norm']
+        self.dropout_rate = cfg['dropout_rate']
 
         # 注意力配置
-        attention_dim = getattr(cfg, 'attention_dim', 128)
+        attention_dim =cfg['in_channels']
 
         # 核心层 - 将通道维度投影到注意力维度
-        self.input_projection = nn.Linear(self.in_channels, attention_dim)
+        #self.input_projection = nn.Linear(self.in_channels, attention_dim)
         self.attention = nn.MultiheadAttention(
-            attention_dim, getattr(cfg, 'n_heads', 8),
+            attention_dim, cfg['n_heads'],
             dropout=self.dropout_rate, batch_first=True
         )
         self.norm = nn.LayerNorm(attention_dim)
@@ -98,8 +98,8 @@ class GlobalBranch(nn.Module):
         x = x.permute(0, 2, 1)  # [B, L, C]
 
         # 2. 投影到注意力维度
-        features = self.input_projection(x)  # [B, L, attention_dim]
-
+        #features = self.input_projection(x)  # [B, L, attention_dim]
+        features=x
         # 3. 位置编码
         if hasattr(self, 'pos_encoding'):
             seq_len = min(features.shape[1], self.pos_encoding.shape[1])

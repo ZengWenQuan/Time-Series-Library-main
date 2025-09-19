@@ -14,7 +14,7 @@ global_fusion: true
 layers:
   # 第一层：初始特征提取
   - name: MultiScaleInception
-    out_channels: 64
+    out_channels: 8
     kernel_sizes: [3, 5, 7, 11]
     pooling:
       kernel_size: 2
@@ -23,7 +23,7 @@ layers:
 
   # 第二层：中级特征提取
   - name: MultiScaleInception
-    out_channels: 128
+    out_channels: 16
     kernel_sizes: [3, 5, 7, 9]
     pooling:
       kernel_size: 2
@@ -32,10 +32,10 @@ layers:
 
   # 第三层：高级特征提取
   - name: MultiScaleInception
-    out_channels: 256
+    out_channels: 8
     kernel_sizes: [3, 5, 7]
 
   # 第四层：最终特征压缩
   - name: MultiScaleInception
-    out_channels: 128
+    out_channels: 16
     kernel_sizes: [3, 5]

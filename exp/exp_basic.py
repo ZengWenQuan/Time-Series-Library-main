@@ -61,7 +61,7 @@ class Exp_Basic(object):
             self.model_config = self._load_and_merge_configs(self.args.model_conf)
             print(self.model_config)
             # 2. Save the merged dictionary to a new temporary file inside the run directory
-            merged_config_path = os.path.join(self.args.run_dir,f'{ self.model_config['name']}.yaml')
+            merged_config_path = os.path.join(self.args.run_dir,f'{ self.model_config["name"]}.yaml')
             with open(merged_config_path, 'w') as f:
                 yaml.dump(self.model_config, f, sort_keys=False, default_flow_style=False, indent=2)
             

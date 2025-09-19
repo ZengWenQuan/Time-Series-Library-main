@@ -1,39 +1,39 @@
 Teff:
-  mean: 5218.311265040202
-  variance: 440103.4935417096
-  std_dev: 663.4029646766056
-  min: 3219.9282
-  max: 7252.2715
-  25th_percentile: 4724.719
-  median_50th_percentile: 5054.0083
-  75th_percentile: 5793.2266
+  mean: 5313.098578707265
+  variance: 344173.60655765224
+  std_dev: 586.663111638743
+  min: 3448.19482421875
+  max: 7093.0
+  25th_percentile: 4865.781494265625
+  median_50th_percentile: 5203.679688
+  75th_percentile: 5796.753173828125
 logg:
-  mean: 2.9632400418516545
-  variance: 1.061569783877292
-  std_dev: 1.0303250865029405
-  min: -0.3892491
-  max: 5.7676373
-  25th_percentile: 2.30091
-  median_50th_percentile: 2.8880606
-  75th_percentile: 3.845
+  mean: 3.6371222256171825
+  variance: 0.81768405097322
+  std_dev: 0.9042588406939795
+  min: -0.017744303
+  max: 5.28942346572876
+  25th_percentile: 2.9315972328186035
+  median_50th_percentile: 3.980980157852173
+  75th_percentile: 4.412659168243408
 FeH:
-  mean: -1.0639017063801564
-  variance: 0.9472559650896607
-  std_dev: 0.9732707563107301
-  min: -4.293
-  max: 0.53299844
-  25th_percentile: -2.011
-  median_50th_percentile: -0.84661156
-  75th_percentile: -0.214989
+  mean: -0.3861959090741265
+  variance: 0.45943296606093065
+  std_dev: 0.6778148464447579
+  min: -4.37
+  max: 0.897599995136261
+  25th_percentile: -0.4300149975
+  median_50th_percentile: -0.17678
+  75th_percentile: 0.0002999299904331
 CFe:
-  mean: 0.20370417815331393
-  variance: 0.213250475810126
-  std_dev: 0.4617905107406669
-  min: -2.018
+  mean: 0.03022032868144011
+  variance: 0.07354896161882195
+  std_dev: 0.2711991180273674
+  min: -1.51060009
   max: 4.803
-  25th_percentile: -0.024844855
-  median_50th_percentile: 0.075890005
-  75th_percentile: 0.31336996
+  25th_percentile: -0.062114984
+  median_50th_percentile: -0.005871996
+  75th_percentile: 0.06474599242210385
 CH:
   mean: -0.8601975282477105
   variance: 0.7062687647056803
@@ -52,25 +52,26 @@ flux:
   25th_percentile: 136.95295902862927
   median_50th_percentile: 481.4963256389092
   75th_percentile: 1618.2711704103758
-
-# --- Data Augmentation Settings ---
 augs_conf:
-  - name: 'add_noise'
-    enabled: true
-    p: 0.2
-    params: {sigma: 0.01}
-  
-  - name: 'random_shift'
-    enabled: true
-    p: 0.2
-    params: {max_shift: 10}
-
-  - name: 'random_scaling'
-    enabled: false # 此项被关闭，将不会被加载
-    p: 0.3
-    params: {min_scale: 0.9, max_scale: 1.1}
-
-  - name: 'random_masking'
-    enabled: false
-    p: 0.2
-    params: {mask_width_ratio: 0.05, mask_value: 1.0}
+- name: add_noise
+  enabled: true
+  p: 0.2
+  params:
+    sigma: 0.01
+- name: random_shift
+  enabled: true
+  p: 0.2
+  params:
+    max_shift: 10
+- name: random_scaling
+  enabled: false
+  p: 0.3
+  params:
+    min_scale: 0.9
+    max_scale: 1.1
+- name: random_masking
+  enabled: false
+  p: 0.2
+  params:
+    mask_width_ratio: 0.05
+    mask_value: 1.0

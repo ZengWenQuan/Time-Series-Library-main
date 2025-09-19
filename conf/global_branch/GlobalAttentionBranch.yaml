@@ -4,7 +4,7 @@
 name: GlobalBranch
 
 # === 基础输入输出参数 ===
-in_channels: 128  # 从backbone输出的通道数
+# in_channels: 128  # 从backbone输出的通道数
 out_channels: 64  # 输出通道数
 
 # === 注意力机制配置 ===

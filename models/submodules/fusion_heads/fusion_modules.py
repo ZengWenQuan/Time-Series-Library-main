@@ -42,9 +42,10 @@ class add(nn.Module):
         if features_local is not None:
             features_local = self.adjuster_local(features_local)
         if features_global is not None :
-            features_gloals = self.adjuster_global(features_global)
-        if features_gloals is not None  and features_local  is not None :
+            features_global = self.adjuster_global(features_global)
+        if features_global is not None  and features_local  is not None :
             return features_local + features_global
+        
         if features_local  is not None :return features_local
         if features_global  is not None :return features_global  
         return None

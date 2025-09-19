@@ -21,7 +21,7 @@ def calculate_statistics(series):
 def main():
     """Main function to update stats.yaml from training data for fixed targets."""
     parser = argparse.ArgumentParser(description="Update stats.yaml with statistics from the training set.")
-    parser.add_argument('--train_dir', type=str, default='dataset/split_data/train', help="Path to the training data directory.")
+    parser.add_argument('--train_dir', type=str, default='dataset/ljf_5w/train', help="Path to the training data directory.")
     parser.add_argument('--stats_path', type=str, default='conf/stats.yaml', help="Path to the stats.yaml file to update.")
     args = parser.parse_args()
 
@@ -33,10 +33,10 @@ def main():
 
     # --- 2. Define and check data file paths ---
     labels_path = os.path.join(args.train_dir, 'labels.csv')
-    continuum_path = os.path.join(args.train_dir, 'continuum.csv')
-    normalized_path = os.path.join(args.train_dir, 'normalized.csv')
+    #continuum_path = os.path.join(args.train_dir, 'continuum.csv')
+    #normalized_path = os.path.join(args.train_dir, 'normalized.csv')
 
-    for path in [labels_path, continuum_path, normalized_path]:
+    for path in [labels_path]:
         if not os.path.exists(path):
             print(f"Error: Required file not found at {path}")
             return
@@ -44,8 +44,8 @@ def main():
     # --- 3. Load data ---
     print("Loading data...")
     labels_df = pd.read_csv(labels_path)
-    continuum_df = pd.read_csv(continuum_path)
-    normalized_df = pd.read_csv(normalized_path)
+    #continuum_df = pd.read_csv(continuum_path)
+    #normalized_df = pd.read_csv(normalized_path)
 
     # --- 4. Calculate new statistics ---
     print("Calculating new statistics...")
@@ -60,9 +60,9 @@ def main():
             print(f"  - Warning: Target '{target_col}' not found in labels.csv. Skipping.")
 
     # Calculate stats for combined flux
-    print("  - Calculating stats for flux...")
-    all_flux_values = pd.concat([continuum_df.iloc[:, 1:].stack(), normalized_df.iloc[:, 1:].stack()])
-    new_stats['flux'] = calculate_statistics(all_flux_values)
+    # print("  - Calculating stats for flux...")
+    # all_flux_values = pd.concat([continuum_df.iloc[:, 1:].stack(), normalized_df.iloc[:, 1:].stack()])
+    # new_stats['flux'] = calculate_statistics(all_flux_values)
 
     # --- 5. Load existing stats.yaml to preserve other keys ---
     try:
