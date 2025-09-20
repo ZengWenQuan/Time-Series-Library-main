@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from ...registries import register_head
-from .fusion_modules import FeatureAdjuster
+from ..registries import register_head
+from ..submodules.fusion_heads.fusion_modules import FeatureAdjuster
 
 @register_head
 class MultiTaskHead(nn.Module):
@@ -12,10 +12,10 @@ class MultiTaskHead(nn.Module):
     def __init__(self, config):
         super(MultiTaskHead, self).__init__()
         self.targets = config['targets']
-        use_batch_norm = config.get('use_batch_norm', True)
-        dropout_rate = config.get('dropout_rate', 0.2)
-        in_channels = config['head_input_channels']
-        in_len = config['head_input_length']
+        use_batch_norm = config.get('use_batch_norm')
+        dropout_rate = config.get('dropout_rate')
+        in_channels = config['input_channels']
+        in_len = config['input_length']
 
         # --- 0. 入口特征调整器 ---
         self.adjuster = FeatureAdjuster(out_channels=in_channels, out_len=in_len)

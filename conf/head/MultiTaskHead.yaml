@@ -1,3 +1,6 @@
+
+name : MultiTaskHead
+
 conv_pyramid:
   # concat策略, in_channels = C1+C2 = 64+64 = 128
   in_channels: 64

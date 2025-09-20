@@ -31,4 +31,4 @@ local_branch_name: 'InceptionBranch'
 fusion_name: 'add'
 
 # 5. 预测头的名称 (对应 conf/head/LstmFfnHead.yaml 和注册的类)
-head_name: 'LstmFfnHead'
+head_name: 'MultiTaskHead'

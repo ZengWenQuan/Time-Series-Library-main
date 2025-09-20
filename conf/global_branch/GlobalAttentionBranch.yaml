@@ -10,7 +10,7 @@ out_channels: 64  # 输出通道数
 # === 注意力机制配置 ===
 attention_dim: 128     # 注意力机制的特征维度
 n_heads: 8            # 多头注意力的头数
-use_positional_encoding: true  # 是否使用位置编码
+use_positional_encoding: false  # 是否使用位置编码
 max_length: 2000      # 最大序列长度（用于位置编码）
 
 # === 多层CNN配置 ===

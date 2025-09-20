@@ -36,16 +36,16 @@ blocks:
     stride: 2                 # 第一个块的步长 (降采样)
 
   # --- Stage 3 (conv4_x) --- 6个块
-  - bottleneck_channels: 256
-    out_channels: 1024
+  - bottleneck_channels: 16
+    out_channels: 64
     num_repeats: 6
     stride: 2                 # 第一个块的步长 (降采样)
 
   # --- Stage 4 (conv5_x) --- 3个块
-  - bottleneck_channels: 512
-    out_channels: 2048
+  - bottleneck_channels: 32
+    out_channels: 128
     num_repeats: 3
     stride: 2                 # 第一个块的步长 (降采样)
 
 # 6. 是否在最后使用自适应池化层将序列长度压缩为1
-use_adaptive_pool: true
+use_adaptive_pool: false
