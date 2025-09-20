@@ -1,0 +1,26 @@
+# Ablation: Local Branch Only
+# 移除 global_branch_name，模型将只使用局部分支
+name: DualBranchSpectralModel
+
+anchor_vars:
+  input_len: &input_l 4800
+  pred_len: &pred_l 4
+  input_channels: &input_c 1
+
+global_settings:
+  input_length: *input_l
+  pred_len: *pred_l
+  input_channels: *input_c
+  use_batch_norm: false
+  dropout_rate: 0
+
+training_name: 'mse_cos'
+
+backbone_name: 'ResNet50Backbone1D'
+
+# global_branch_name: 'GlobalAttentionBranch' # <-- REMOVED
+local_branch_name: 'InceptionBranch'
+
+# fusion_name: 'add' # <-- REMOVED (only one branch)
+
+head_name: 'MultiTaskHead'

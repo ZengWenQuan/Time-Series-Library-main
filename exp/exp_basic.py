@@ -127,7 +127,7 @@ class Exp_Basic(object):
         for name_key, (subdir, config_key) in module_mapping.items():
             if name_key in main_config:
                 module_name = main_config[name_key]
-                base_conf_dir = os.path.dirname(main_config_path)
+                base_conf_dir = 'conf' # Always search from the root conf directory
                 sub_config_path = os.path.join(base_conf_dir, subdir, f"{module_name}.yaml")
                 
                 if not os.path.exists(sub_config_path):
@@ -245,10 +245,17 @@ class Exp_Basic(object):
 
     def _acquire_device(self):
         if self.args.use_gpu and self.args.gpu_type == 'cuda':
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(
-                self.args.gpu) if not self.args.use_multi_gpu else self.args.devices
-            device = torch.device('cuda:{}'.format(self.args.gpu))
-            print('Use GPU: cuda:{}'.format(self.args.gpu))
+            if self.args.use_multi_gpu:
+                os.environ["CUDA_VISIBLE_DEVICES"] = self.args.devices
+                # The primary device is set based on the first ID in the list
+                device = torch.device(f'cuda:{self.args.device_ids[0]}')
+                print(f'Use Multi-GPU: devices {self.args.devices}. Main device: {device}')
+            else:
+                # When selecting a single GPU (e.g., GPU 1), we make it the only visible device.
+                # PyTorch then sees this single device as 'cuda:0'.
+                os.environ["CUDA_VISIBLE_DEVICES"] = str(self.args.gpu)
+                device = torch.device('cuda:0')  # Always use cuda:0 when only one device is visible
+                print(f'Use GPU: physical device {self.args.gpu} (mapped to cuda:0)')
         elif self.args.use_gpu and self.args.gpu_type == 'mps':
             device = torch.device('mps')
             print('Use GPU: mps')
