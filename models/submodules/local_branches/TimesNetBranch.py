@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.fft
 import torch.nn.functional as F
 
-from ...registries import register_normalized_branch
+from ...registries import register_local_branch
 
 class Inception_Block_V1(nn.Module):
     def __init__(self, in_channels, out_channels, num_kernels=6, init_weight=True):
@@ -78,7 +78,7 @@ class TimesBlock(nn.Module):
         res = res + x
         return res
 
-@register_normalized_branch
+@register_local_branch
 class TimesNetBranch(nn.Module):
     """
     基于 TimesNet 的特征提取分支 (v2, 遵循项目风格)。

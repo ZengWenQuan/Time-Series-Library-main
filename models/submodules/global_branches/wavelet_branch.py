@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from ...registries import register_continuum_branch
+from ...registries import register_global_branch
 
 try:
     from pytorch_wavelets import DWT1D
@@ -24,7 +24,7 @@ class InceptionBlock(nn.Module):
         x3 = F.relu(self.path3(x))
         return torch.cat([x1, x2, x3], dim=1)
 
-@register_continuum_branch
+@register_global_branch
 class ContinuumWaveletBranch(nn.Module):
     def __init__(self, config):
         super(ContinuumWaveletBranch, self).__init__()

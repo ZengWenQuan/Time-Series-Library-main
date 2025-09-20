@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import math
 import torch.nn.functional as F
-from ...registries import register_normalized_branch
+from ...registries import register_local_branch
 
 # ====================================================================================
 # Helper Classes copied from layers/SelfAttention_Family.py and layers/Transformer_EncDec.py
@@ -164,7 +164,7 @@ class PatchEmbedding(nn.Module):
         x = self.value_embedding(x) + self.position_embedding(x)
         return self.dropout(x), n_vars
 
-@register_normalized_branch
+@register_local_branch
 class PatchTstBranch(nn.Module):
     """
     基于 PatchTST 的特征提取分支 (v2, 遵循项目风格)。

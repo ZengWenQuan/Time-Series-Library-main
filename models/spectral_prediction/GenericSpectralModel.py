@@ -18,18 +18,18 @@ class GenericSpectralModel(nn.Module):
     """
     def __init__(self, configs):
         super(GenericSpectralModel, self).__init__()
-        self.task_name = configs.task_name
-        self.targets = configs.targets
+        self.task_name = configs['task_name']
+        self.targets = configs['targets']
 
-        with open(configs.model_conf, 'r') as f:
-            model_config = yaml.safe_load(f)
-        self.model_config = model_config
+        # with open(configs.model_conf, 'r') as f:
+        #     self.model_config = yaml.safe_load(f)
+        self.model_config = configs
 
-        global_settings = model_config.get('global_settings', {})
+        global_settings = self.model_config.get('global_settings', {})
 
         # Initialize all modules to None
-        self.continuum_branch = None
-        self.normalized_branch = None
+        self.global_branch = None
+        self.local_branch = None
         self.fusion = None
         self.prediction_head = None
 
@@ -38,67 +38,67 @@ class GenericSpectralModel(nn.Module):
         head_input_length = 0
 
         # 1. Initialize Continuum Branch (if configured)
-        if 'continuum_branch_config' in model_config and 'continuum_branch_name' in model_config:
-            print("Initializing Continuum Branch...")
-            cont_branch_config = model_config['continuum_branch_config']
-            cont_branch_config.update(global_settings)
-            ContBranchClass = CONTINUUM_BRANCH_REGISTRY[model_config['continuum_branch_name']]
-            self.continuum_branch = ContBranchClass(cont_branch_config)
+        if 'global_branch_config' in self.model_config and 'global_branch_name' in self.model_config:
+            print("Initializing global Branch...")
+            global_branch_config = self.model_config['global_branch_config']
+            global_branch_config.update(global_settings)
+            ContBranchClass = CONTINUUM_BRANCH_REGISTRY[self.model_config['global_branch_name']]
+            self.global_branch = ContBranchClass(global_branch_config)
 
         # 2. Initialize Normalized Branch (if configured)
-        if 'normalized_branch_config' in model_config and 'normalized_branch_name' in model_config:
+        if 'local_branch_config' in self.model_config and 'local_branch_name' in self.model_config:
             print("Initializing Normalized Branch...")
-            norm_branch_config = model_config['normalized_branch_config']
-            norm_branch_config.update(global_settings)
-            NormBranchClass = NORMALIZED_BRANCH_REGISTRY[model_config['normalized_branch_name']]
-            self.normalized_branch = NormBranchClass(norm_branch_config)
+            local_branch_config = self.model_config['local_branch_config']
+            local_branch_config.update(global_settings)
+            NormBranchClass = NORMALIZED_BRANCH_REGISTRY[self.model_config['local_branch_name']]
+            self.local_branch = NormBranchClass(local_branch_config)
 
         # 3. Initialize Fusion module (if configured)
-        if 'fusion_config' in model_config and 'fusion_name' in model_config:
+        if 'fusion_config' in self.model_config and 'fusion_name' in self.model_config:
             print("Initializing Fusion Module (allowing single branch)...")
-            fusion_config = model_config['fusion_config']
+            fusion_config = self.model_config['fusion_config']
             fusion_config.update(global_settings)
-            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
+            FusionClass = FUSION_REGISTRY[self.model_config['fusion_name']]
 
             # Conditionally provide branch info to fusion config
-            if self.normalized_branch:
-                fusion_config['channels_norm'] = self.normalized_branch.output_channels
-                fusion_config['len_norm'] = self.normalized_branch.output_length
-            if self.continuum_branch:
-                fusion_config['channels_cont'] = self.continuum_branch.output_channels
-                fusion_config['len_cont'] = self.continuum_branch.output_length
+            if self.local_branch:
+                fusion_config['channels_norm'] = self.local_branch.output_channels
+                fusion_config['len_norm'] = self.local_branch.output_length
+            if self.global_branch:
+                fusion_config['channels_cont'] = self.global_branch.output_channels
+                fusion_config['len_cont'] = self.global_branch.output_length
 
             self.fusion = FusionClass(fusion_config)
             
             # Determine head input based on what will be produced after fusion/bypass
-            if self.continuum_branch and self.normalized_branch:
+            if self.global_branch and self.local_branch:
                 head_input_channels = self.fusion.output_channels
                 head_input_length = self.fusion.output_length
-            elif self.continuum_branch:
-                head_input_channels = self.continuum_branch.output_channels
-                head_input_length = self.continuum_branch.output_length
-            elif self.normalized_branch:
-                head_input_channels = self.normalized_branch.output_channels
-                head_input_length = self.normalized_branch.output_length
+            elif self.global_branch:
+                head_input_channels = self.global_branch.output_channels
+                head_input_length = self.global_branch.output_length
+            elif self.local_branch:
+                head_input_channels = self.local_branch.output_channels
+                head_input_length = self.local_branch.output_length
         else:
             # No fusion module, determine head input from available branches by concatenation
             print("No Fusion module configured. Head input will be concatenation of available branch outputs.")
-            if self.continuum_branch:
-                head_input_channels += self.continuum_branch.output_channels
-                head_input_length = self.continuum_branch.output_length # Assume lengths are compatible
-            if self.normalized_branch:
-                head_input_channels += self.normalized_branch.output_channels
-                head_input_length = self.normalized_branch.output_length # Overwrite or check for consistency
+            if self.global_branch:
+                head_input_channels += self.global_branch.output_channels
+                head_input_length = self.global_branch.output_length # Assume lengths are compatible
+            if self.local_branch:
+                head_input_channels += self.local_branch.output_channels
+                head_input_length = self.local_branch.output_length # Overwrite or check for consistency
 
         if head_input_channels == 0:
             raise ValueError("No branches were configured. The model has no inputs for the prediction head.")
 
         # 4. Initialize Prediction Head (always required)
-        if 'head_config' in model_config and 'head_name' in model_config:
+        if 'head_config' in self.model_config and 'head_name' in self.model_config:
             print("Initializing Prediction Head...")
-            head_config = model_config['head_config']
+            head_config = self.model_config['head_config']
             head_config.update(global_settings)
-            HeadClass = HEAD_REGISTRY[model_config['head_name']]
+            HeadClass = HEAD_REGISTRY[self.model_config['head_name']]
             head_config['head_input_channels'] = head_input_channels
             head_config['head_input_length'] = head_input_length
             head_config['targets'] = self.targets
@@ -117,30 +117,32 @@ class GenericSpectralModel(nn.Module):
         device = sample_batch.device
 
         # --- Input Handling ---
-        x_continuum, x_normalized = None, None
-        if self.task_name == 'regression':
-            x_continuum = x_normalized = sample_batch
-        elif self.task_name == 'spectral_prediction':
-            if sample_batch.dim() == 3 and sample_batch.shape[-1] == 2:
-                x_continuum = sample_batch[:, :, 0].unsqueeze(1)
-                x_normalized = sample_batch[:, :, 1].unsqueeze(1)
-            elif sample_batch.dim() == 2 and sample_batch.shape[-1] == 2:
-                x_continuum = sample_batch[:, 0].unsqueeze(1)
-                x_normalized = sample_batch[:, 1].unsqueeze(1)
-
+        # x_continuum, x_normalized = None, None
+        # if self.task_name == 'regression':
+        #     x_continuum = x_normalized = sample_batch
+        # elif self.task_name == 'spectral_prediction':
+        #     if sample_batch.dim() == 3 and sample_batch.shape[-1] == 2:
+        #         x_continuum = sample_batch[:, :, 0].unsqueeze(1)
+        #         x_normalized = sample_batch[:, :, 1].unsqueeze(1)
+        #     elif sample_batch.dim() == 2 and sample_batch.shape[-1] == 2:
+        #         x_continuum = sample_batch[:, 0].unsqueeze(1)
+        #         x_normalized = sample_batch[:, 1].unsqueeze(1)
+        sample_batch = sample_batch.unsqueeze(1)
+        x_continuum=sample_batch
+        x_normalized=sample_batch
         # --- Profile available modules ---
         features_cont, features_norm = None, None
         head_input = None
 
-        if self.continuum_branch and x_continuum is not None:
-            macs, params = profile(self.continuum_branch, inputs=(x_continuum,), verbose=False)
-            stats['continuum_branch'] = {'flops': macs * 2, 'params': params}
-            features_cont = self.continuum_branch(x_continuum)
+        if self.global_branch and x_continuum is not None:
+            macs, params = profile(self.global_branch, inputs=(x_continuum,), verbose=False)
+            stats['global_branch'] = {'flops': macs * 2, 'params': params}
+            features_cont = self.global_branch(x_continuum)
 
-        if self.normalized_branch and x_normalized is not None:
-            macs, params = profile(self.normalized_branch, inputs=(x_normalized,), verbose=False)
-            stats['normalized_branch'] = {'flops': macs * 2, 'params': params}
-            features_norm = self.normalized_branch(x_normalized)
+        if self.local_branch and x_normalized is not None:
+            macs, params = profile(self.local_branch, inputs=(x_normalized,), verbose=False)
+            stats['local_branch'] = {'flops': macs * 2, 'params': params}
+            features_norm = self.local_branch(x_normalized)
 
         if self.fusion:
             if features_norm is None or features_cont is None:
@@ -164,24 +166,27 @@ class GenericSpectralModel(nn.Module):
 
     def forward(self, x):
         # --- Input Handling based on task ---
-        x_continuum, x_normalized = None, None
-        if self.task_name == 'regression':
-            # For regression, the same input 'x' is used for all present branches
-            x_continuum = x if self.continuum_branch else None
-            x_normalized = x if self.normalized_branch else None
-        elif self.task_name == 'spectral_prediction':
-            # For spectral prediction, input 'x' is expected to have two channels
-            if x.dim() == 3 and x.shape[-1] == 2:
-                x_continuum = x[:, :, 0].unsqueeze(1) if self.continuum_branch else None
-                x_normalized = x[:, :, 1].unsqueeze(1) if self.normalized_branch else None
-            else:
-                raise ValueError(f"Unexpected input shape for spectral_prediction: {x.shape}. Expected (batch, seq_len, 2).")
-        else:
-            raise ValueError(f"Unknown task_name: {self.task_name}")
+        # x_continuum, x_normalized = None, None
+        # if self.task_name == 'regression':
+        #     # For regression, the same input 'x' is used for all present branches
+        #     x_continuum = x if self.global_branch else None
+        #     x_normalized = x if self.local_branch else None
+        # elif self.task_name == 'spectral_prediction':
+        #     # For spectral prediction, input 'x' is expected to have two channels
+        #     if x.dim() == 3 and x.shape[-1] == 2:
+        #         x_continuum = x[:, :, 0].unsqueeze(1) if self.global_branch else None
+        #         x_normalized = x[:, :, 1].unsqueeze(1) if self.local_branch else None
+        #     else:
+        #         raise ValueError(f"Unexpected input shape for spectral_prediction: {x.shape}. Expected (batch, seq_len, 2).")
+        # else:
+        #     raise ValueError(f"Unknown task_name: {self.task_name}")
 
-        # --- Branch Forward Pass ---
-        features_cont = self.continuum_branch(x_continuum) if self.continuum_branch and x_continuum is not None else None
-        features_norm = self.normalized_branch(x_normalized) if self.normalized_branch and x_normalized is not None else None
+        # # --- Branch Forward Pass ---
+        x = x.unsqueeze(1)
+        x_continuum=x
+        x_normalized=x
+        features_cont = self.global_branch(x_continuum) if self.global_branch and x_continuum is not None else None
+        features_norm = self.local_branch(x_normalized) if self.local_branch and x_normalized is not None else None
 
         # --- Fusion or Bypass/Concatenation ---
         head_input = None

@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ...registries import register_continuum_branch
+from ...registries import register_global_branch
 
-@register_continuum_branch
+@register_global_branch
 class LargeKernelBranch(nn.Module):
     def __init__(self, config):
         super(LargeKernelBranch, self).__init__()

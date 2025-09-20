@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ...registries import register_continuum_branch
+from ...registries import register_global_branch
 from ..local_branches.multiscale_pyramid_branch import MultiScalePyramidBranch
 
 class FrequencyFeatureExtractor(nn.Module):
@@ -66,7 +66,7 @@ class AttentionGate(nn.Module):
         attention_weights = self.gate_fnn(x_flat)
         return attention_weights
 
-@register_continuum_branch
+@register_global_branch
 class CustomAttentiveBranch(nn.Module):
     """
     A convolutional branch with a parallel channel attention mechanism.

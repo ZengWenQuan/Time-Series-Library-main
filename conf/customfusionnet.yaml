@@ -1,5 +1,5 @@
 # CustomFusionNet 配置文件 (v3, 全面重构以兼容新架构)
-
+name : CustomFusionNet
 # --- 新增：定义可复用的锚点 ---
 anchor_vars:
   input_len: &input_l 4800 # 假设输入长度，需要根据实际数据调整

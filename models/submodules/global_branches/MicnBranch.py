@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ...registries import register_continuum_branch
+from ...registries import register_global_branch
 
 class moving_avg(nn.Module):
     """
@@ -36,7 +36,7 @@ class series_decomp(nn.Module):
         moving_mean = self.moving_avg(x)
         res = x - moving_mean
         return res, moving_mean
-@register_continuum_branch
+@register_global_branch
 class MicnBranch(nn.Module):
     """
     基于 MICN 的特征提取分支。

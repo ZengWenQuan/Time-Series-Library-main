@@ -159,7 +159,7 @@ class Exp_Basic(object):
         if model_class is None:
             raise ValueError(f"Model '{self.args.model}' is not registered. "
                              f"Available models: {list(MODEL_REGISTRY.keys())}")
-        
+        self.model_config['task_name']=self.args.task_name
         self.logger.info(f"Building model: {self.model_config['name']}")
         # Add sample_batch to the config object, which is used by the model's __init__
         self.args.sample_batch = sample_batch

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ...registries import register_normalized_branch
+from ...registries import register_local_branch
 
 class ChannelAttention(nn.Module):
     """Squeeze-and-Excitation style channel attention module."""
@@ -46,7 +46,7 @@ class MultiScaleConvBlock(nn.Module):
         attended_features = self.channel_attention(bn_features)
         return F.relu(attended_features)
 
-@register_normalized_branch
+@register_local_branch
 class MultiScalePyramidBranch(nn.Module):
     """
     多尺度金字塔分支 (v3)。

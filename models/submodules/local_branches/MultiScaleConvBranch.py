@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ...registries import register_normalized_branch
+from ...registries import register_local_branch
 
 class MultiScaleConvBlock(nn.Module):
     """
@@ -34,7 +34,7 @@ class MultiScaleConvBlock(nn.Module):
             
         return self.norm(projected + residual)
 
-@register_normalized_branch
+@register_local_branch
 class MultiScaleConvBranch(nn.Module):
     """
     A branch that stacks multiple MultiScaleConvBlocks to capture features at various scales.
