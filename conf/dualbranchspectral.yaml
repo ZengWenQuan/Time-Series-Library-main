@@ -11,8 +11,8 @@ global_settings:
   input_len: *input_l
   pred_len: *pred_l
   input_channels: *input_c
-  use_batch_norm: false
-  dropout_rate: 0.1
+  use_batch_norm: true
+  dropout_rate: 0
 
 # --- 训练、主干、分支与头模块选择 ---
 # 通过这里的名字，让 run.py 去加载对应的配置文件和模块

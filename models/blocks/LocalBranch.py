@@ -22,8 +22,8 @@ class LocalBranch(nn.Module):
         super().__init__()
 
         # 全局控制参数
-        self.use_batch_norm = getattr(cfg, 'use_batch_norm', True)
-        self.dropout_rate = getattr(cfg, 'dropout_rate', 0.1)
+        self.use_batch_norm = cfg.get( 'use_batch_norm', True)
+        self.dropout_rate = cfg.get('dropout_rate', 0.1)
 
         self.layers = nn.ModuleList()
         current_channels = cfg['in_channels']

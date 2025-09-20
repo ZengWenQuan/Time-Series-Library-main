@@ -4,11 +4,11 @@
 name: MultiLayerInceptionBackbone
 
 # 输入通道数（对于光谱数据通常是1或2）
-input_channels: 1
-input_length: 4800
+# input_channels: 1
+# input_len: 4800
 
 # 是否使用全局特征融合和通道注意力
-global_fusion: true
+global_fusion: false
 
 # 多层inception网络配置
 layers:

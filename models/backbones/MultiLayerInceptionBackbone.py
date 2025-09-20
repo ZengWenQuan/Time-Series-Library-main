@@ -67,7 +67,7 @@ class MultiLayerInceptionBackbone(nn.Module):
                 )
 
         # 全局特征融合层
-        if cfg.get('global_fusion', True):
+        if cfg.get('global_fusion', False):
             self.global_pool = nn.AdaptiveAvgPool1d(1)
             self.global_fc = nn.Linear(self.output_channels, self.output_channels // 4)
             self.global_activation = nn.ReLU()

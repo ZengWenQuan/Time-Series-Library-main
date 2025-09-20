@@ -45,7 +45,7 @@ class GlobalBranch(nn.Module):
 
         # 基础参数
         self.in_channels = cfg['in_channels']
-        self.out_channels = cfg['out_channels']
+        self.out_channels = cfg['cnn_layers'][-1]['out_channels']
         self.use_batch_norm =cfg['use_batch_norm']
         self.dropout_rate = cfg['dropout_rate']
 
@@ -60,18 +60,14 @@ class GlobalBranch(nn.Module):
         )
         self.norm = nn.LayerNorm(attention_dim)
         self.output_projection = nn.Linear(attention_dim, self.out_channels)
-
+        #print(cfg)
         # 位置编码（可选）
-        if getattr(cfg, 'use_positional_encoding', True):
-            max_length = getattr(cfg, 'max_length', 2000)
+        if cfg['use_positional_encoding']:
+            max_length = cfg['max_length']
             self.pos_encoding = nn.Parameter(torch.randn(1, max_length, attention_dim) * 0.02)
 
         # 多层CNN
-        cnn_layers = getattr(cfg, 'cnn_layers', [
-            {'in_channels': self.out_channels, 'out_channels': self.out_channels, 'kernel_size': 3, 'stride': 1},
-            {'in_channels': self.out_channels, 'out_channels': self.out_channels, 'kernel_size': 5, 'stride': 1},
-            {'in_channels': self.out_channels, 'out_channels': self.out_channels, 'kernel_size': 3, 'stride': 2}
-        ])
+        cnn_layers = cfg['cnn_layers']
         self.cnn = MultiLayerCNN(cnn_layers, self.use_batch_norm, self.dropout_rate)
 
         # 输出维度
