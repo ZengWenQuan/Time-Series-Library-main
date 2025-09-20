@@ -33,7 +33,7 @@ class Dataset_Spectral(Dataset):
             if 'obsid' in df_feature.columns:
                 df_feature.set_index('obsid', inplace=True)
             else:
-                df_feature.set_index(df_feature.columns[0], inplace=True)
+                raise ValueError('必须在特征中提供obsid')
         else:
             raise ValueError(f"不支持的特征文件格式: {self.args.feature_filename}。请使用 .csv 或 .feather。")
 
@@ -67,14 +67,14 @@ class Dataset_Spectral(Dataset):
             self.data_label = data_label_raw
             
         if self.flag == 'train':
-            if self.show_stats:
+            #if self.show_stats:
                 print("Statistics for scaled training data:")
                 self._calculate_and_print_stats(pd.DataFrame(self.data_feature), "Features", stat_type='feature')
-                self._calculate_and_print_stats(pd.DataFrame(self.data_label), "Labels", stat_type='label')
+                self._calculate_and_print_stats(pd.DataFrame(data_label_raw), "Labels", stat_type='label')
             
-            if self.transform:
-                self.data_feature = self.transform(self.data_feature)
-                print(f"Applied training data augmentations: {self.transform.aval_name}")
+            # if self.transform:
+            #     self.data_feature = self.transform(self.data_feature)
+            #     print(f"Applied training data augmentations: {self.transform.aval_name}")
 
         print(f"[{self.__class__.__name__}] flag: {self.flag}")
         print(f"feature shape: {self.data_feature.shape}, label shape: {self.data_label.shape}")

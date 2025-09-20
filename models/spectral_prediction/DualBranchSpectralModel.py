@@ -112,8 +112,12 @@ class DualBranchSpectralModel(nn.Module):
         from thop import profile
         stats = {}
         x = sample_batch
-        x = x.unsqueeze(1)
 
+        # --- Input Preprocessing for Single-Channel Data ---
+        if x.dim() == 2:  # Handle (B, L) format
+            x = x.unsqueeze(1)  # -> (B, 1, L)
+
+        # --- Backbone Forward Pass ---
         if self.backbone:
             macs, params = profile(self.backbone, inputs=(x,), verbose=False)
             stats['backbone'] = {'flops': macs * 2, 'params': params}
@@ -149,16 +153,26 @@ class DualBranchSpectralModel(nn.Module):
                 
 
     def forward(self, x):
-        # --- Backbone Forward Pass (if exists) ---
-        x = x.unsqueeze(1)
+        # --- Input Preprocessing for Single-Channel Data ---
+        if x.dim() == 2:  # Handle (B, L) format
+            x = x.unsqueeze(1)  # -> (B, 1, L)
+
+        # 2. 通过骨干网络
         if self.backbone:
             backbone_output = self.backbone(x)
-        else :
-            backbone_output=x
-        features_global = self.global_branch(backbone_output) if self.global_branch is not None  else backbone_output
-        features_local = self.local_branch(backbone_output) if self.local_branch is not None else backbone_output
+        else:
+            backbone_output = x
 
-        # --- Fusion or Bypass/Concatenation ---
+        # 3. 正确地获取分支输出，如果分支不存在则为 None
+        features_global = self.global_branch(backbone_output) if self.global_branch is not None else None
+        features_local = self.local_branch(backbone_output) if self.local_branch is not None else None
+
+        # 4. 融合模块必须能处理 None 输入
+        # (例如，如果一个分支输出为 None，它应该只返回另一个分支的输出)
         head_input = self.fusion(features_local, features_global)
+
+        # 5. 如果融合后无输出，则报错
+        if head_input is None:
+            raise ValueError("Fusion module returned None. Check branch and fusion logic.")
 
         return self.prediction_head(head_input)
