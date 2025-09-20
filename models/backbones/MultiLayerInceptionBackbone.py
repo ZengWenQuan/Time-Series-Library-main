@@ -28,7 +28,7 @@ class MultiLayerInceptionBackbone(nn.Module):
         # 计算输出维度用于后续模块
         self.output_channels = self.layer_configs[-1]['out_channels']
         # 输出长度假设不变（使用same padding）
-        self.output_length = cfg['input_len']
+        self.output_length = cfg['input_length']
 
         # 构建多层inception网络
         for i, layer_cfg in enumerate(self.layer_configs):

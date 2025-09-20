@@ -1,0 +1,25 @@
+# /conf/local_branch/MultiScaleConvBranch.yaml
+
+# 模块的注册名称 (保持不变，依然是 LocalBranch)
+name: InceptionBranch
+
+# --- 可选：在分支末端加入通道注意力机制 ---
+use_channel_attention: true
+attention_reduction_ratio: 16 # 注意力机制中瓶颈层的缩减比例
+
+# 定义一个或多个多尺度卷积块的列表
+blocks:
+  # --- 第一个块 ---
+  - out_channels: 64
+    kernel_sizes: [3, 5, 7] # 并行卷积核的尺寸
+    stride: 1               # 整个块的步长 (1表示不降采样)
+
+  # --- 第二个块 ---
+  - out_channels: 128
+    kernel_sizes: [3, 5]
+    stride: 2               # 整个块的步长 (2表示降采样)
+
+  # --- 第三个块 ---
+  - out_channels: 128
+    kernel_sizes: [3, 5, 7]
+    stride: 1

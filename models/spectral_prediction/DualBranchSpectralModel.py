@@ -9,6 +9,7 @@ from ..registries import (
     FUSION_REGISTRY,
     HEAD_REGISTRY
 )
+
 @register_model
 class DualBranchSpectralModel(nn.Module):
     """
@@ -37,72 +38,62 @@ class DualBranchSpectralModel(nn.Module):
             backbone_config.update(global_settings)
             BackboneClass = BACKBONES[backbone_config['name']]
             self.backbone = BackboneClass(backbone_config)
-            #print(f"Backbone output - channels: {self.backbone.output_channels}, length: {self.backbone.output_length}")
 
-        # --- Dynamically build the model based on config ---
-        head_input_channels = 0
-        head_input_length = 0
+        has_global = 'global_branch_config' in model_config
+        has_local = 'local_branch_config' in model_config
 
-        # 2. Initialize Global Branch (if configured)
-        if 'global_branch_config' in model_config:
-            print("Initializing Global Branch...")
-            global_branch_config = model_config['global_branch_config']
-            global_branch_config.update(global_settings)
+        # --- Conditional Channel Allocation ---
+        if self.backbone:
+            backbone_channels = self.backbone.output_channels
+            backbone_length = self.backbone.output_length
+            # If backbone exists and both branches are present, split channels
+            if has_global and has_local:
+                print(f"Splitting backbone output ({backbone_channels} channels) for dual branches.")
+                global_in_channels = backbone_channels // 2
+                local_in_channels = backbone_channels - global_in_channels
+            else: # Single branch case with backbone
+                global_in_channels = local_in_channels = backbone_channels
+        else:
+            # No backbone (ablation study): both branches get the raw input
+            print("No backbone. Branches will receive full raw input.")
+            input_channels = global_settings.get('input_channels', 1)
+            backbone_length = global_settings.get('input_len', 5000)
+            global_in_channels = local_in_channels = input_channels
 
-            # 如果有backbone，更新global_branch的输入参数
-            if self.backbone:
-                global_branch_config['in_channels'] = self.backbone.output_channels
-                global_branch_config['in_len'] = self.backbone.output_length
+        if has_global:
+            print(f"Initializing Global Branch with {global_in_channels} input channels...")
+            g_conf = model_config['global_branch_config']
+            g_conf.update(global_settings)
+            g_conf['in_channels'] = global_in_channels
+            g_conf['in_len'] = backbone_length
+            self.global_branch = GLOBAL_BRANCH_REGISTRY[g_conf['name']](g_conf)
 
-            GlobalBranchClass = GLOBAL_BRANCH_REGISTRY[global_branch_config['name']]
-            self.global_branch = GlobalBranchClass(global_branch_config)
-            print(f"Global Branch output - channels: {self.global_branch.output_channels}, length: {self.global_branch.output_length}")
+        if has_local:
+            print(f"Initializing Local Branch with {local_in_channels} input channels...")
+            l_conf = model_config['local_branch_config']
+            l_conf.update(global_settings)
+            l_conf['in_channels'] = local_in_channels
+            l_conf['in_len'] = backbone_length
+            self.local_branch = LOCAL_BRANCH_REGISTRY[l_conf['name']](l_conf)
 
-        # 3. Initialize Local Branch (if configured)
-        if 'local_branch_config' in model_config :
-            print("Initializing Local Branch...")
-            local_branch_config = model_config['local_branch_config']
-            local_branch_config.update(global_settings)
-
-            # 如果有backbone，更新local_branch的输入参数
-            if self.backbone: #如果有backbone，输入通道数和长度使用backbone的输出，否则使用全局的input_channels,input_len
-                local_branch_config['in_channels'] = self.backbone.output_channels
-                local_branch_config['in_len'] = self.backbone.output_length
-                print(self.backbone.output_channels,'backbone通道数')
-
-            LocalBranchClass = LOCAL_BRANCH_REGISTRY[local_branch_config['name']]
-            self.local_branch = LocalBranchClass(local_branch_config)
-            print(f"Local Branch output - channels: {self.local_branch.output_channels}, length: {self.local_branch.output_length}")
-
-        # 4. Initialize Fusion module (if configured)
         if 'fusion_config' in model_config and 'fusion_name' in model_config:
-            print("Initializing Fusion Module (allowing single branch)...")
+            print("Initializing Fusion Module...")
             fusion_config = model_config['fusion_config']
             fusion_config.update(global_settings)
-            FusionClass = FUSION_REGISTRY[model_config['fusion_name']]
-            
-            self.fusion = FusionClass(fusion_config)
-            head_input_channels=self.fusion.output_channels
-            print(f"Fusion output - channels: {self.fusion.output_channels}, length: {self.fusion.output_length}")
+            self.fusion = FUSION_REGISTRY[model_config['fusion_name']](fusion_config)
+        else:
+            raise ValueError("A 'fusion_config' and 'fusion_name' must be provided.")
 
-        if head_input_channels == 0:
-            raise ValueError("No branches were configured. The model has no inputs for the prediction head.")
-
-        # 5. Initialize Prediction Head (always required)
-        if 'head_config' in model_config :
+        if 'head_config' in model_config:
             print("Initializing Prediction Head...")
             head_config = model_config['head_config']
             head_config.update(global_settings)
-            HeadClass = HEAD_REGISTRY[head_config['name']]
-            head_config['input_channels'] =  self.fusion.output_channels
+            head_config['input_channels'] = self.fusion.output_channels
             head_config['input_length'] = self.fusion.output_length
             head_config['targets'] = self.targets
-            print(f"Head input - channels: {head_input_channels}, length: {head_input_length}")
-            self.prediction_head = HeadClass(head_config)
-            print(f"targets: {len(self.targets)}")
+            self.prediction_head = HEAD_REGISTRY[head_config['name']](head_config)
         else:
-            raise ValueError("A 'head_config' must be provided in the model configuration.")
-
+            raise ValueError("A 'head_config' must be provided.")
 
     def profile_model(self, sample_batch):
         """
@@ -112,67 +103,78 @@ class DualBranchSpectralModel(nn.Module):
         from thop import profile
         stats = {}
         x = sample_batch
+        if x.dim() == 2: x = x.unsqueeze(1)
 
-        # --- Input Preprocessing for Single-Channel Data ---
-        if x.dim() == 2:  # Handle (B, L) format
-            x = x.unsqueeze(1)  # -> (B, 1, L)
-
-        # --- Backbone Forward Pass ---
+        # 1. Profile Backbone
+        branch_input = self.backbone(x) if self.backbone else x
         if self.backbone:
             macs, params = profile(self.backbone, inputs=(x,), verbose=False)
             stats['backbone'] = {'flops': macs * 2, 'params': params}
-            backbone_output = self.backbone(x)
-        else:
-            backbone_output = x
 
-        if self.global_branch:
-            macs, params = profile(self.global_branch, inputs=(backbone_output,), verbose=False)
+        # 2. Profile Branches with correct conditional logic
+        features_global, features_local = None, None
+
+        # Case 1: Backbone exists and both branches exist (split channels)
+        if self.backbone and self.global_branch and self.local_branch:
+            mid_point = branch_input.shape[1] // 2
+            global_input = branch_input[:, :mid_point, :]
+            local_input = branch_input[:, mid_point:, :]
+
+            macs, params = profile(self.global_branch, inputs=(global_input,), verbose=False)
             stats['global_branch'] = {'flops': macs * 2, 'params': params}
-            features_global = self.global_branch(backbone_output)
-        else :        
-            features_global = backbone_output
+            features_global = self.global_branch(global_input)
 
-        if self.local_branch:
-            macs, params = profile(self.local_branch, inputs=(backbone_output,), verbose=False)
+            macs, params = profile(self.local_branch, inputs=(local_input,), verbose=False)
             stats['local_branch'] = {'flops': macs * 2, 'params': params}
-            features_local = self.local_branch(backbone_output)
-        else :
-            features_local = backbone_output
-
-        if self.fusion:
-            macs, params = profile(self.fusion, inputs=(features_local, features_global), verbose=False)
-            stats['fusion'] = {'flops': macs * 2, 'params': params}
-            
-            head_input = self.fusion(features_local, features_global)
-
-        if self.prediction_head :
-            macs, params = profile(self.prediction_head, inputs=(head_input,), verbose=False)
-            stats['prediction_head'] = {'flops': macs * 2, 'params': params}
-        
-        return stats
-                
-
-    def forward(self, x):
-        # --- Input Preprocessing for Single-Channel Data ---
-        if x.dim() == 2:  # Handle (B, L) format
-            x = x.unsqueeze(1)  # -> (B, 1, L)
-
-        # 2. 通过骨干网络
-        if self.backbone:
-            backbone_output = self.backbone(x)
+            features_local = self.local_branch(local_input)
         else:
-            backbone_output = x
+            # Case 2: No backbone or single branch (shared input)
+            if self.global_branch:
+                macs, params = profile(self.global_branch, inputs=(branch_input,), verbose=False)
+                stats['global_branch'] = {'flops': macs * 2, 'params': params}
+                features_global = self.global_branch(branch_input)
+            if self.local_branch:
+                macs, params = profile(self.local_branch, inputs=(branch_input,), verbose=False)
+                stats['local_branch'] = {'flops': macs * 2, 'params': params}
+                features_local = self.local_branch(branch_input)
 
-        # 3. 正确地获取分支输出，如果分支不存在则为 None
-        features_global = self.global_branch(backbone_output) if self.global_branch is not None else None
-        features_local = self.local_branch(backbone_output) if self.local_branch is not None else None
-
-        # 4. 融合模块必须能处理 None 输入
-        # (例如，如果一个分支输出为 None，它应该只返回另一个分支的输出)
+        # 3. Profile Fusion
+        if self.fusion is None: raise ValueError("Fusion module is not configured.")
+        macs, params = profile(self.fusion, inputs=(features_local, features_global), verbose=False)
+        stats['fusion'] = {'flops': macs * 2, 'params': params}
         head_input = self.fusion(features_local, features_global)
 
-        # 5. 如果融合后无输出，则报错
-        if head_input is None:
-            raise ValueError("Fusion module returned None. Check branch and fusion logic.")
+        # 4. Profile Head
+        if self.prediction_head is None: raise ValueError("Prediction head is not configured.")
+        macs, params = profile(self.prediction_head, inputs=(head_input,), verbose=False)
+        stats['prediction_head'] = {'flops': macs * 2, 'params': params}
+        
+        return stats
+
+    def forward(self, x, return_features=False):
+        if x.dim() == 2: x = x.unsqueeze(1)
+
+        branch_input = self.backbone(x) if self.backbone else x
+
+        features_global, features_local = None, None
+
+        # If backbone exists and both branches exist, split the output
+        if self.backbone and self.global_branch and self.local_branch:
+            mid_point = branch_input.shape[1] // 2
+            features_global = self.global_branch(branch_input[:, :mid_point, :])
+            features_local = self.local_branch(branch_input[:, mid_point:, :])
+        else:
+            # Otherwise, both branches receive the same full input (either raw x or full backbone output)
+            if self.global_branch:
+                features_global = self.global_branch(branch_input)
+            if self.local_branch:
+                features_local = self.local_branch(branch_input)
+
+        if self.fusion is None: raise ValueError("Fusion module is not configured.")
+        head_input = self.fusion(features_local, features_global)
+        if head_input is None: raise ValueError("Fusion module returned None.")
+
+        if return_features:
+            return head_input, features_local, features_global
 
         return self.prediction_head(head_input)

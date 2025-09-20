@@ -1,0 +1,46 @@
+# /conf/backbone/ResInceptionBackbone.yaml
+
+# 1. 模块的注册名称
+name: ResInceptionBackbone
+
+# 控制是否在整个模块中使用BatchNorm层
+#use_batch_norm: true
+
+# 2. 初始输入维度
+
+# 3. Stem (初始主干层): 在进入主要残差块之前对输入进行初步处理
+#    这是ResNet的标准设计，用于快速降低分辨率和提取基础特征。
+stem:
+  out_channels: 16
+  kernel_size: 15
+  stride: 2
+
+# 4. 核心部分：残差-Inception块的列表
+#    网络将按顺序构建这些阶段(stage)，每个阶段包含一个或多个残差块。
+blocks:
+  # --- Stage 1 ---
+  - out_channels: 8         # 当前阶段所有块的输出通道数
+    inception_kernel_sizes: [3, 5, 7] # Inception模块使用的多尺度卷积核
+    num_repeats: 3           # 重复3次该配置的残差块
+    stride: 1                # 第一个块的步长为1 (不降采样)
+
+  # --- Stage 2 ---
+  - out_channels: 16
+    inception_kernel_sizes: [3, 5, 7, 9]
+    num_repeats: 4
+    stride: 2                # 第一个块的步长为2 (降采样)
+
+  # --- Stage 3 ---
+  - out_channels: 64
+    inception_kernel_sizes: [3, 5, 7]
+    num_repeats: 6
+    stride: 2                # 第一个块的步长为2 (降采样)
+
+  # --- Stage 4 ---
+  - out_channels: 128
+    inception_kernel_sizes: [3, 5]
+    num_repeats: 3
+    stride: 2                # 第一个块的步长为2 (降采样)
+
+# 5. 是否在最后使用自适应池化层将序列长度压缩为1
+use_adaptive_pool: true

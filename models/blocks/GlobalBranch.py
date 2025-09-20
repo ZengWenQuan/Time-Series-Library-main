@@ -20,7 +20,7 @@ class MultiLayerCNN(nn.Module):
             if use_batch_norm:
                 layers.append(nn.BatchNorm1d(cfg['out_channels']))
             # 激活和Dropout
-            layers.append(nn.ReLU(inplace=True))
+            layers.append(nn.ReLU(inplace=False))
             if dropout_rate > 0:
                 layers.append(nn.Dropout(dropout_rate))
 
@@ -50,7 +50,7 @@ class GlobalBranch(nn.Module):
         self.dropout_rate = cfg['dropout_rate']
 
         # 注意力配置
-        attention_dim =cfg['in_channels']
+        attention_dim = cfg['in_channels']
 
         # 核心层 - 将通道维度投影到注意力维度
         #self.input_projection = nn.Linear(self.in_channels, attention_dim)
@@ -63,8 +63,9 @@ class GlobalBranch(nn.Module):
         #print(cfg)
         # 位置编码（可选）
         if cfg['use_positional_encoding']:
-            max_length = cfg['max_length']
-            self.pos_encoding = nn.Parameter(torch.randn(1, max_length, attention_dim) * 0.02)
+            # 假设输入长度是固定的，直接使用in_len
+            input_length = cfg['in_len']
+            self.pos_encoding = nn.Parameter(torch.randn(1, input_length, attention_dim) * 0.02)
 
         # 多层CNN
         cnn_layers = cfg['cnn_layers']
@@ -98,8 +99,8 @@ class GlobalBranch(nn.Module):
         features=x
         # 3. 位置编码
         if hasattr(self, 'pos_encoding'):
-            seq_len = min(features.shape[1], self.pos_encoding.shape[1])
-            features[:, :seq_len, :] = features[:, :seq_len, :] + self.pos_encoding[:, :seq_len, :]
+            # 假设输入长度固定，直接相加
+            features = features + self.pos_encoding
 
         # 4. 自注意力（已有残差连接）
         attn_out, _ = self.attention(features, features, features)

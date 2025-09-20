@@ -1,10 +1,21 @@
-# @conf/head/LstmFfnHead.yaml
+# /conf/head/LstmFfnHead.yaml (Corrected)
 
-# 模块的类名
+# 1. 模块注册名称
 name: LstmFfnHead
 
-# 模块参数
-lstm_hidden_dim: 128
-num_lstm_layers: 2
-ffn_hidden_dim: 256
-dropout: 0.1
+# 2. 输入维度 (这些值通常由前面的backbone或fusion模块的输出决定)
+#    在主模型加载时，这些值会被动态更新，这里的值仅作示例
+input_channels: 512
+input_length: 128
+
+# 注意：'targets' 参数不需要在这里定义。
+# 它会由主模型(如DualBranchSpectralModel)在初始化时，
+# 从最顶层的配置文件中读取并动态地传递给这个模块。
+
+# 3. LSTM层配置
+lstm_hidden_dim: 256       # LSTM层的隐藏单元数
+num_lstm_layers: 2         # LSTM的层数
+
+# 4. 每个独立FFN头的配置
+ffn_hidden_dim: 128        # 每个FFN头的中间层维度
+dropout: 0.1                 # FFN头中使用的dropout率
