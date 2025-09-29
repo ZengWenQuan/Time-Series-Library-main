@@ -26,7 +26,7 @@ training_name: 'mse_cos'
 backbone_name: 'pyramid_cnn_backbone' # <-- 修改为新的金字塔Backbone
 
 # 3. 分支的名称
-global_branch_name: 'GlobalAttentionBranch'
+#global_branch_name: 'GlobalAttentionBranch'
 local_branch_name: 'InceptionBranch'
 
 # 4. 融合模块名称
