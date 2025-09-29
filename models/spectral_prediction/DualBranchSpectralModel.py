@@ -41,7 +41,10 @@ class DualBranchSpectralModel(nn.Module):
             target_channels = global_settings.get('dummy_backbone_out_channels', 64)
             target_len = global_settings.get('dummy_backbone_out_len', 600)
             print(f"Dummy backbone will adjust input from ({raw_in_channels}ch, {raw_in_len}len) to ({target_channels}ch, {target_len}len).")
-            self.backbone = FeatureAdjuster(raw_in_channels, raw_in_len, target_channels, target_len)
+            self.backbone = FeatureAdjuster(target_channels, target_len)
+            # Manually set output shape attributes for downstream modules
+            self.backbone.output_channels = target_channels
+            self.backbone.output_length = target_len
 
         # --- 2. Initialize Real Branches (if configured) ---
         branch_in_channels = self.backbone.output_channels
@@ -74,13 +77,19 @@ class DualBranchSpectralModel(nn.Module):
             print("Global branch is missing. Creating a FeatureAdjuster placeholder to match local_branch output.")
             target_channels = self.local_branch.output_channels
             target_len = self.local_branch.output_length
-            self.global_branch = FeatureAdjuster(branch_in_channels, branch_in_len, target_channels, target_len)
+            self.global_branch = FeatureAdjuster(target_channels, target_len)
+            # Manually set output shape attributes
+            self.global_branch.output_channels = target_channels
+            self.global_branch.output_length = target_len
 
         elif self.local_branch is None:
             print("Local branch is missing. Creating a FeatureAdjuster placeholder to match global_branch output.")
             target_channels = self.global_branch.output_channels
             target_len = self.global_branch.output_length
-            self.local_branch = FeatureAdjuster(branch_in_channels, branch_in_len, target_channels, target_len)
+            self.local_branch = FeatureAdjuster(target_channels, target_len)
+            # Manually set output shape attributes
+            self.local_branch.output_channels = target_channels
+            self.local_branch.output_length = target_len
 
         # --- 4. Initialize Fusion and Head (Unconditionally) ---
         # After step 3, both branches always exist and have compatible shapes.
