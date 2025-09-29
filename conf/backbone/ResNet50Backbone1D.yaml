@@ -4,7 +4,7 @@
 name: ResNet50Backbone1D
 
 # 2. 全局控制
-use_batch_norm: true
+# use_batch_norm: true
 
 # 3. 初始输入维度
 in_channels: 1
@@ -12,8 +12,8 @@ input_length: 5000
 
 # 4. Stem (初始主干层)，模仿标准ResNet50
 stem:
-  out_channels: 64
-  kernel_size: 7
+  out_channels: 16
+  kernel_size: 3
   stride: 2
   # Stem层之后通常会跟一个MaxPool
   pool_kernel_size: 3
@@ -24,26 +24,26 @@ stem:
 #    每个阶段都由指定数量的"瓶颈块"组成。
 blocks:
   # --- Stage 1 (conv2_x) --- 3个块
-  - bottleneck_channels: 64   # 瓶颈块内部的通道数
-    out_channels: 256         # 瓶颈块最终输出的通道数 (4 * bottleneck_channels)
+  - bottleneck_channels: 8   # 瓶颈块内部的通道数
+    out_channels: 16         # 瓶颈块最终输出的通道数 (4 * bottleneck_channels)
     num_repeats: 3            # 重复次数
     stride: 1                 # 第一个块的步长 (此阶段不降采样)
 
   # --- Stage 2 (conv3_x) --- 4个块
-  - bottleneck_channels: 128
-    out_channels: 512
+  - bottleneck_channels: 16
+    out_channels: 32
     num_repeats: 4
     stride: 2                 # 第一个块的步长 (降采样)
 
   # --- Stage 3 (conv4_x) --- 6个块
-  - bottleneck_channels: 16
+  - bottleneck_channels: 32
     out_channels: 64
     num_repeats: 6
     stride: 2                 # 第一个块的步长 (降采样)
 
   # --- Stage 4 (conv5_x) --- 3个块
-  - bottleneck_channels: 32
-    out_channels: 128
+  - bottleneck_channels: 16
+    out_channels: 32
     num_repeats: 3
     stride: 2                 # 第一个块的步长 (降采样)
 

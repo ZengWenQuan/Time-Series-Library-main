@@ -253,8 +253,8 @@ class Exp_Basic(object):
             else:
                 # When selecting a single GPU (e.g., GPU 1), we make it the only visible device.
                 # PyTorch then sees this single device as 'cuda:0'.
-                os.environ["CUDA_VISIBLE_DEVICES"] = str(self.args.gpu)
-                device = torch.device('cuda:0')  # Always use cuda:0 when only one device is visible
+                #os.environ["CUDA_VISIBLE_DEVICES"] = str(self.args.gpu)
+                device = torch.device(f'cuda:{self.args.gpu}')  # Always use cuda:0 when only one device is visible
                 print(f'Use GPU: physical device {self.args.gpu} (mapped to cuda:0)')
         elif self.args.use_gpu and self.args.gpu_type == 'mps':
             device = torch.device('mps')
@@ -630,10 +630,8 @@ class Exp_Basic(object):
 
         # 3. 在测试集上评估
         self.logger.info("--- Starting Final Test ---")
-        if self.test_data:
-            test_loss, test_preds, test_trues ,_= self.vali(self.test_data,self.test_loader, self._select_criterion())
-        else:
-            test_loss, test_preds, test_trues ,_= self.vali(self.vali_data,self.vali_loader, self._select_criterion())
+        
+        test_loss, test_preds, test_trues ,_= self.vali(self.vali_data,self.vali_loader, self._select_criterion())
 
         if test_preds is None:
             self.logger.warning("Test evaluation returned no results. Skipping metric calculation and saving.")
