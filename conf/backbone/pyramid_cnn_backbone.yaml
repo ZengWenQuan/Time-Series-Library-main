@@ -1,0 +1,31 @@
+
+# /conf/backbone/pyramid_cnn_backbone.yaml
+name: PyramidCNNBackbone
+
+# Stem层配置: 初始特征提取和第一次下采样
+stem:
+  out_channels: 64
+  kernel_size: 7
+  stride: 2
+  padding: 3
+
+# 金字塔阶段配置
+# 每个阶段定义了一系列残差块，并通过stride实现下采样
+stages:
+  # Stage 1
+  - num_blocks: 2
+    out_channels: 128
+    kernel_size: 3
+    stride: 2 # 下采样
+
+  # Stage 2
+  - num_blocks: 2
+    out_channels: 256
+    kernel_size: 3
+    stride: 2 # 下采样
+
+  # Stage 3
+  - num_blocks: 2
+    out_channels: 512
+    kernel_size: 3
+    stride: 2 # 下采样

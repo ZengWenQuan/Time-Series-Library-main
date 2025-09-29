@@ -1,0 +1,30 @@
+
+# /conf/backbone/hybrid_transformer_backbone.yaml
+name: HybridTransformerBackbone
+
+# CNN Stem 配置
+stem:
+  layers:
+    # Layer 1
+    - out_channels: 64
+      kernel_size: 7
+      stride: 2
+      padding: 3
+    # Layer 2
+    - out_channels: 128
+      kernel_size: 3
+      stride: 2
+      padding: 1
+    # Layer 3
+    - out_channels: 256
+      kernel_size: 3
+      stride: 2
+      padding: 1
+
+# Transformer Encoder 配置
+transformer:
+  d_model: 256         # 模型维度，必须与CNN Stem最后一层的输出通道匹配
+  nhead: 8             # 多头注意力的头数
+  num_layers: 4        # Transformer Encoder的层数
+  dim_feedforward: 512 # 前馈网络的隐藏层维度
+  dropout: 0.1         # Dropout率

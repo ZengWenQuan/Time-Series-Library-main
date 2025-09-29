@@ -25,110 +25,82 @@ class DualBranchSpectralModel(nn.Module):
         model_config = configs
         global_settings = model_config.get('global_settings', {})
 
-        # --- 1. Initialize all modules to None for flexible ablation ---
-        self.backbone = None
-        self.global_branch = None
-        self.local_branch = None
-        self.fusion = None
-        self.prediction_head = None
+        # Import FeatureAdjuster locally for this specific logic
+        from ..submodules.fusion_heads.fusion_modules import FeatureAdjuster
 
-        # --- 2. Initialize Backbone (real or dummy) ---
+        # --- 1. Initialize Backbone (real or dummy) ---
         if 'backbone_config' in model_config:
             print("Initializing Backbone from config...")
             backbone_config = model_config['backbone_config']
             backbone_config.update(global_settings)
             self.backbone = BACKBONES[backbone_config['name']](backbone_config)
         else:
-            # No backbone configured, create a "dummy" projection backbone
-            print("No backbone configured. Creating a dummy projection backbone (Conv1d).")
+            print("No backbone configured. Creating a FeatureAdjuster dummy backbone.")
             raw_in_channels = global_settings.get('input_channels', 1)
-            input_len = global_settings.get('input_length', 5000)
-            
-            # Use a configurable projected channel size, default to 16
-            projected_channels = global_settings.get('projected_channels', 16)
-            
-            kernel_size = 3
-            stride = 2
-            # Use padding to ensure the formula is clean and reduces length by approx. stride factor
-            padding = 1 
-            
-            self.backbone = nn.Conv1d(
-                in_channels=raw_in_channels,
-                out_channels=projected_channels,
-                kernel_size=3,
-                stride=2,
-                padding=padding
-            )
-            
-            # Manually calculate and attach output shape attributes to the dummy backbone
-            self.backbone.output_channels = projected_channels
-            
-            # L_out = floor((L_in + 2*padding - kernel_size) / stride + 1)
-            output_length = (input_len + 2 * padding - kernel_size) // stride + 1
-            self.backbone.output_length = output_length
-            
-            print(f"Dummy backbone projects from {raw_in_channels}ch to {projected_channels}ch. Length from {input_len} to {output_length}.")
+            raw_in_len = global_settings.get('input_length', 4800)
+            target_channels = global_settings.get('dummy_backbone_out_channels', 64)
+            target_len = global_settings.get('dummy_backbone_out_len', 600)
+            print(f"Dummy backbone will adjust input from ({raw_in_channels}ch, {raw_in_len}len) to ({target_channels}ch, {target_len}len).")
+            self.backbone = FeatureAdjuster(raw_in_channels, raw_in_len, target_channels, target_len)
 
-        # --- 3. Determine input dimensions for the branches ---
-        # This part now works universally because self.backbone always exists (either real or dummy)
+        # --- 2. Initialize Real Branches (if configured) ---
         branch_in_channels = self.backbone.output_channels
         branch_in_len = self.backbone.output_length
         print(f"Branches will receive input with: {branch_in_channels} channels, {branch_in_len} length.")
 
-        # --- 4. Initialize Branches (if configured) ---
+        self.global_branch = None
         if 'global_branch_config' in model_config:
-            print(f"Initializing Global Branch...")
+            print(f"Initializing Global Branch from config...")
             g_conf = model_config['global_branch_config']
             g_conf.update(global_settings)
             g_conf['in_channels'] = branch_in_channels
             g_conf['in_len'] = branch_in_len
             self.global_branch = GLOBAL_BRANCH_REGISTRY[g_conf['name']](g_conf)
 
+        self.local_branch = None
         if 'local_branch_config' in model_config:
-            print(f"Initializing Local Branch...")
+            print(f"Initializing Local Branch from config...")
             l_conf = model_config['local_branch_config']
             l_conf.update(global_settings)
             l_conf['in_channels'] = branch_in_channels
             l_conf['in_len'] = branch_in_len
             self.local_branch = LOCAL_BRANCH_REGISTRY[l_conf['name']](l_conf)
 
-        # --- 5. Determine Head Input and Initialize Fusion (if needed) ---
-        head_input_channels = 0
-        head_input_length = 0
+        # --- 3. Create FeatureAdjuster Placeholders for Missing Branches ---
+        if self.global_branch is None and self.local_branch is None:
+            raise ValueError("At least one branch (global or local) must be configured.")
 
-        if self.global_branch and self.local_branch:
-            # Both branches exist, fusion is required
-            print("Both branches found. Initializing Fusion Module...")
-            if 'fusion_config' not in model_config or 'fusion_name' not in model_config:
-                raise ValueError("With two branches, 'fusion_config' and 'fusion_name' must be provided.")
-            
-            fusion_config = model_config['fusion_config']
-            fusion_config.update(global_settings)
-            # Provide branch output info to fusion module for its own setup
-            if hasattr(self.global_branch, 'output_channels'):
-                fusion_config['channels_cont'] = self.global_branch.output_channels
-                fusion_config['len_cont'] = self.global_branch.output_length
-            if hasattr(self.local_branch, 'output_channels'):
-                fusion_config['channels_norm'] = self.local_branch.output_channels
-                fusion_config['len_norm'] = self.local_branch.output_length
-            
-            self.fusion = FUSION_REGISTRY[model_config['fusion_name']](fusion_config)
-            head_input_channels = self.fusion.output_channels
-            head_input_length = self.fusion.output_length
-        elif self.global_branch:
-            # Only global branch exists, bypass fusion
-            print("Only global branch found. Output will be passed directly to head.")
-            head_input_channels = self.global_branch.output_channels
-            head_input_length = self.global_branch.output_length
-        elif self.local_branch:
-            # Only local branch exists, bypass fusion
-            print("Only local branch found. Output will be passed directly to head.")
-            head_input_channels = self.local_branch.output_channels
-            head_input_length = self.local_branch.output_length
-        else:
-            raise ValueError("Invalid model configuration: At least one branch (global or local) must be defined.")
+        elif self.global_branch is None:
+            print("Global branch is missing. Creating a FeatureAdjuster placeholder to match local_branch output.")
+            target_channels = self.local_branch.output_channels
+            target_len = self.local_branch.output_length
+            self.global_branch = FeatureAdjuster(branch_in_channels, branch_in_len, target_channels, target_len)
 
-        # --- 6. Initialize Prediction Head ---
+        elif self.local_branch is None:
+            print("Local branch is missing. Creating a FeatureAdjuster placeholder to match global_branch output.")
+            target_channels = self.global_branch.output_channels
+            target_len = self.global_branch.output_length
+            self.local_branch = FeatureAdjuster(branch_in_channels, branch_in_len, target_channels, target_len)
+
+        # --- 4. Initialize Fusion and Head (Unconditionally) ---
+        # After step 3, both branches always exist and have compatible shapes.
+        # The fusion module is now always expected to be configured.
+        print("Initializing Fusion Module...")
+        if 'fusion_config' not in model_config or 'fusion_name' not in model_config:
+            raise ValueError("A 'fusion_config' and 'fusion_name' must be provided.")
+        
+        fusion_config = model_config['fusion_config']
+        fusion_config.update(global_settings)
+        fusion_config['channels_cont'] = self.global_branch.output_channels
+        fusion_config['len_cont'] = self.global_branch.output_length
+        fusion_config['channels_norm'] = self.local_branch.output_channels
+        fusion_config['len_norm'] = self.local_branch.output_length
+        
+        self.fusion = FUSION_REGISTRY[model_config['fusion_name']](fusion_config)
+        head_input_channels = self.fusion.output_channels
+        head_input_length = self.fusion.output_length
+
+        # --- 5. Initialize Prediction Head ---
         if 'head_config' in model_config:
             print(f"Initializing Prediction Head with {head_input_channels} input channels and {head_input_length} length...")
             head_config = model_config['head_config']
@@ -156,29 +128,18 @@ class DualBranchSpectralModel(nn.Module):
         branch_input = self.backbone(x)
 
         # 2. Profile Branches
-        features_global, features_local = None, None
-        if self.global_branch:
-            macs, params = profile(self.global_branch, inputs=(branch_input,), verbose=False)
-            stats['global_branch'] = {'flops': macs * 2, 'params': params}
-            features_global = self.global_branch(branch_input)
-        if self.local_branch:
-            macs, params = profile(self.local_branch, inputs=(branch_input,), verbose=False)
-            stats['local_branch'] = {'flops': macs * 2, 'params': params}
-            features_local = self.local_branch(branch_input)
-
-        # 3. Profile Fusion or handle single-branch passthrough
-        head_input = None
-        if self.fusion and features_global is not None and features_local is not None:
-            macs, params = profile(self.fusion, inputs=(features_local, features_global), verbose=False)
-            stats['fusion'] = {'flops': macs * 2, 'params': params}
-            head_input = self.fusion(features_local, features_global)
-        elif features_global is not None:
-            head_input = features_global
-        elif features_local is not None:
-            head_input = features_local
+        macs, params = profile(self.global_branch, inputs=(branch_input,), verbose=False)
+        stats['global_branch'] = {'flops': macs * 2, 'params': params}
+        features_global = self.global_branch(branch_input)
         
-        if head_input is None:
-            raise RuntimeError("Profiling failed: No features were generated to profile the head.")
+        macs, params = profile(self.local_branch, inputs=(branch_input,), verbose=False)
+        stats['local_branch'] = {'flops': macs * 2, 'params': params}
+        features_local = self.local_branch(branch_input)
+
+        # 3. Profile Fusion
+        macs, params = profile(self.fusion, inputs=(features_local, features_global), verbose=False)
+        stats['fusion'] = {'flops': macs * 2, 'params': params}
+        head_input = self.fusion(features_local, features_global)
 
         # 4. Profile Head
         macs, params = profile(self.prediction_head, inputs=(head_input,), verbose=False)
@@ -189,28 +150,16 @@ class DualBranchSpectralModel(nn.Module):
     def forward(self, x, return_features=False):
         if x.dim() == 2: x = x.unsqueeze(1)
 
-        # 1. Backbone Pass (real or dummy)
+        # 1. Backbone Pass
         branch_input = self.backbone(x)
 
-        # 2. Branch Pass (if they exist)
-        features_global = self.global_branch(branch_input) if self.global_branch else None
-        features_local = self.local_branch(branch_input) if self.local_branch else None
+        # 2. Branch Pass (real or placeholder)
+        features_global = self.global_branch(branch_input)
+        features_local = self.local_branch(branch_input)
 
-        # 3. Fusion or Passthrough Logic
-        head_input = None
-        if self.fusion and features_global is not None and features_local is not None:
-            # Both branches ran, use fusion module
-            head_input = self.fusion(features_local, features_global)
-        elif features_global is not None:
-            # Only global branch ran
-            head_input = features_global
-        elif features_local is not None:
-            # Only local branch ran
-            head_input = features_local
+        # 3. Fusion (Unconditional)
+        head_input = self.fusion(features_local, features_global)
         
-        if head_input is None:
-            raise RuntimeError("Invalid forward pass: No features were generated by any branch.")
-
         if return_features:
             return head_input, features_local, features_global
 

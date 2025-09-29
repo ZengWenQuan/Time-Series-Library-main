@@ -47,7 +47,7 @@ class ResNet50Backbone1D(nn.Module):
         super().__init__()
 
         # --- 解析配置 ---
-        in_channels = cfg['in_channels']
+        in_channels = cfg['input_channels']
         input_length = cfg['input_length']
         stem_cfg = cfg['stem']
         block_configs = cfg['blocks']

@@ -1,0 +1,36 @@
+
+# DualBranchSpectralModel 配置文件 (使用 PyramidCNNBackbone)
+name : DualBranchSpectralModel
+# --- 定义可复用的锚点 ---
+anchor_vars:
+  input_len: &input_l 4800
+  pred_len: &pred_l 4
+  input_channels: &input_c 1
+
+# --- 全局模型设置 ---
+global_settings:
+  input_length: *input_l
+  pred_len: *pred_l
+  input_channels: *input_c
+  use_batch_norm: true
+  dropout_rate: 0
+  # -- Dummy Backbone Settings (for ablation) --
+  dummy_backbone_out_channels: 64
+  dummy_backbone_out_len: 600
+
+# --- 训练、主干、分支与头模块选择 ---
+# 1. 训练循环的名称
+training_name: 'mse_cos'
+
+# 2. 主干网络的名称
+backbone_name: 'pyramid_cnn_backbone' # <-- 修改为新的金字塔Backbone
+
+# 3. 分支的名称
+global_branch_name: 'GlobalAttentionBranch'
+local_branch_name: 'InceptionBranch'
+
+# 4. 融合模块名称
+fusion_name: 'add'
+
+# 5. 预测头的名称
+head_name: 'MultiTaskHead'

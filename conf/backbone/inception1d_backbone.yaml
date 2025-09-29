@@ -1,0 +1,31 @@
+
+# /conf/backbone/inception1d_backbone.yaml
+name: Inception1DBackbone
+
+# Stem层配置
+stem:
+  out_channels: 64
+  kernel_size: 7
+  stride: 2
+  padding: 3
+  pool_kernel_size: 3
+  pool_stride: 2
+  pool_padding: 1
+
+# Inception模块配置列表
+# 每个字典定义一个Inception模块的并行分支的输出通道数
+inception_modules:
+  # Module 1
+  - ch1x1: 64
+    ch3x3_re: 96
+    ch3x3: 128
+    ch5x5_re: 16
+    ch5x5: 32
+    pool_proj: 32
+  # Module 2
+  - ch1x1: 128
+    ch3x3_re: 128
+    ch3x3: 192
+    ch5x5_re: 32
+    ch5x5: 96
+    pool_proj: 64

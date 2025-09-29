@@ -1,0 +1,16 @@
+
+# /conf/backbone/dilated_cnn_backbone.yaml
+name: DilatedCNNBackbone
+
+# 初始卷积层输出通道数
+initial_channels: 32
+
+# 每个空洞卷积块的输出通道数
+block_channels: 64
+
+# 空洞卷积块的数量
+# 8个块，dilation将从1, 2, 4, ..., 128
+num_blocks: 8
+
+# 卷积核大小
+kernel_size: 3

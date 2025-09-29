@@ -13,6 +13,9 @@ global_settings:
   input_channels: *input_c
   use_batch_norm: true
   dropout_rate: 0
+  # -- Dummy Backbone Settings (for ablation) --
+  dummy_backbone_out_channels: 64
+  dummy_backbone_out_len: 600
 
 # --- 训练、主干、分支与头模块选择 ---
 # 通过这里的名字，让 run.py 去加载对应的配置文件和模块

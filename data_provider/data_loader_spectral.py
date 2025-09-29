@@ -41,7 +41,7 @@ class Dataset_Spectral(Dataset):
 
         if self.is_finetune:
             print("Filtering for finetuning dataset (FeH < -2)")
-            df_label = df_label[df_label['FeH'] < -2]
+            df_label = df_label[df_label['FeH'] < -2 and df_feature['logg']<3.5]
 
         common_obsids = df_feature.index.intersection(df_label.index)
         
