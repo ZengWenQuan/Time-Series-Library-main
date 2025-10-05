@@ -85,6 +85,9 @@ if __name__ == '__main__':
     # --- Augmentation ---
     parser.add_argument('--seed', type=int, default=42, help="Randomization seed")
 
+    parser.add_argument('--run_test_all', action='store_true', help='Run the test_all procedure on a directory of datasets')
+    parser.add_argument('--test_data_path', type=str, default=None, help='Path to the root folder for test_all datasets')
+
     args = parser.parse_args()
     
     fix_seed(args.seed)
@@ -143,5 +146,9 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
     else:
         exp = Exp(args)
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
-        exp.test()
+        if args.run_test_all:
+            print('>>>>>>>running test_all : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
+            exp.test_all()
+        else:
+            print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
+            exp.test()

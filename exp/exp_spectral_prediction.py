@@ -10,6 +10,7 @@ import yaml
 import warnings
 
 from utils.scaler import Scaler
+import pandas as pd
 
 warnings.filterwarnings('ignore')
 
@@ -82,3 +83,72 @@ class Exp_Spectral_Prediction(Exp_Basic):
         cls_metrics = calculate_feh_classification_metrics(preds, trues, self.args.feh_index)
         save_feh_classification_metrics(cls_metrics, save_path, phase=phase)
         return reg_metrics
+
+    def test_all(self):
+        # 1. Load model
+        checkpoint_path = self.args.checkpoints
+        if not (checkpoint_path and os.path.exists(checkpoint_path)):
+            self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting test_all.")
+            return
+        self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
+        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=False)
+
+        # 2. Get data path and create results path
+        test_data_root = self.args.test_data_path
+        if not test_data_root or not os.path.isdir(test_data_root):
+            self.logger.error(f"Invalid test_data_path: {test_data_root}")
+            return
+            
+        results_root = os.path.join(os.path.dirname(test_data_root.rstrip('/')), 'test_all_results_' + os.path.basename(test_data_root.rstrip('/')))
+        self.logger.info(f"Results will be saved in: {results_root}")
+        os.makedirs(results_root, exist_ok=True)
+
+        # 3. Find all subdirectories (each is a dataset)
+        dataset_flags = [d for d in os.listdir(test_data_root) if os.path.isdir(os.path.join(test_data_root, d))]
+
+        if not dataset_flags:
+            self.logger.warning(f"No subdirectories found in {test_data_root}")
+            return
+
+        original_root_path = self.args.root_path
+        self.args.root_path = test_data_root
+
+        for flag in dataset_flags:
+            self.logger.info(f"--- Starting evaluation on '{flag}' data ---")
+            
+            try:
+                data, loader = data_provider(args=self.args, flag=flag, feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
+            except FileNotFoundError as e:
+                self.logger.error(f"Could not load data for '{flag}'. Missing file: {e}. Skipping.")
+                continue
+
+            if data is None or loader is None:
+                self.logger.warning(f"No data/loader for '{flag}' split. Skipping.")
+                continue
+
+            save_dir = os.path.join(results_root, flag)
+            os.makedirs(save_dir, exist_ok=True)
+
+            loss, preds, trues, obsids = self.vali(data, loader, self._select_criterion())
+
+            if preds is None:
+                self.logger.warning(f"Evaluation on '{flag}' returned no results. Skipping.")
+                continue
+
+            self.logger.info(f"Saving predictions for '{flag}' to {save_dir}")
+            pred_df = pd.DataFrame({'obsid': obsids})
+            for i, target_name in enumerate(self.targets):
+                pred_df[f'{target_name}_true'] = trues[:, i]
+                pred_df[f'{target_name}_pred'] = preds[:, i]
+            pred_df.to_csv(os.path.join(save_dir, 'predictions.csv'), index=False)
+
+            self.logger.info(f"Calculating and saving metrics for '{flag}'...")
+            original_run_dir = self.args.run_dir
+            self.args.run_dir = save_dir
+            
+            self.calculate_and_save_all_metrics(preds, trues, phase=flag, save_as='final')
+            
+            self.args.run_dir = original_run_dir
+
+        self.args.root_path = original_root_path
+        self.logger.info("--- test_all completed ---")
