@@ -1,16 +1,15 @@
-
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-
 from utils.stellar_metrics import calculate_metrics, save_regression_metrics, calculate_feh_classification_metrics, save_feh_classification_metrics, save_history_plot
-
 import os
 import yaml
-
 import warnings
-
 from utils.scaler import Scaler
 import pandas as pd
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader
+import glob
 
 warnings.filterwarnings('ignore')
 
@@ -19,25 +18,29 @@ class Exp_Spectral_Prediction(Exp_Basic):
     """
     恒星参数估计（Stellar Parameter Estimation）实验类
     """
+
     def __init__(self, args):
         super(Exp_Spectral_Prediction, self).__init__(args)
-        self.label_scaler=self.get_label_scaler()
-        self.feature_scaler=self.get_feature_scaler()
-        self._get_data()
+        self.label_scaler = self.get_label_scaler()
+        self.feature_scaler = self.get_feature_scaler()
 
-        # 从数据加载器中取一个样本
-        sample_batch, _, _ = next(iter(self.train_loader))
-        sample_batch = sample_batch.float().to(self.device)
+        sample_batch = None
+        # Only load data if not in prediction-only mode
+        if not getattr(self.args, 'predict', False):
+            self._get_data()
+            if self.train_loader:
+                sample_batch, _, _ = next(iter(self.train_loader))
+                sample_batch = sample_batch.float().to(self.device)
 
-        # 将样本传递给模型构建函数
         self.model = self._build_model(sample_batch=sample_batch)
 
     def _get_data(self):
-        self.train_data, self.train_loader = data_provider(args=self.args,flag='train', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-        self.vali_data, self.vali_loader = data_provider(args=self.args,flag='val', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-        #self.test_data, self.test_loader = data_provider(args=self.args,flag='test', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler) if os.path.exists(os.path.join(self.args.root_path, 'test')) else (None, None)
-
-
+        self.train_data, self.train_loader = data_provider(args=self.args, flag='train',
+                                                          feature_scaler=self.feature_scaler,
+                                                          label_scaler=self.label_scaler)
+        self.vali_data, self.vali_loader = data_provider(args=self.args, flag='val',
+                                                         feature_scaler=self.feature_scaler,
+                                                         label_scaler=self.label_scaler)
 
     def _get_finetune_data(self):
         """
@@ -46,109 +49,140 @@ class Exp_Spectral_Prediction(Exp_Basic):
         # Set is_finetune flag in args
         self.args.is_finetune = True
         self.logger.info("Loading finetuning dataset...")
-        
-        self.finetune_train_data, self.finetune_train_loader = data_provider(args=self.args, flag='train', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-        self.finetune_vali_data, self.finetune_vali_loader = data_provider(args=self.args, flag='val', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-        
+
+        self.finetune_train_data, self.finetune_train_loader = data_provider(args=self.args, flag='train',
+                                                                             feature_scaler=self.feature_scaler,
+                                                                             label_scaler=self.label_scaler)
+        self.finetune_vali_data, self.finetune_vali_loader = data_provider(args=self.args, flag='val',
+                                                                          feature_scaler=self.feature_scaler,
+                                                                          label_scaler=self.label_scaler)
+
         test_path = os.path.join(self.args.root_path, 'test')
-        self.finetune_test_data, self.finetune_test_loader = data_provider(args=self.args, flag='test', feature_scaler=self.feature_scaler, label_scaler=self.label_scaler) if os.path.exists(test_path) else (None, None)
+        self.finetune_test_data, self.finetune_test_loader = data_provider(args=self.args, flag='test',
+                                                                          feature_scaler=self.feature_scaler,
+                                                                          label_scaler=self.label_scaler) if os.path.exists(
+            test_path) else (None, None)
 
         # Unset the flag to avoid side effects in other parts of the code
         self.args.is_finetune = False
         self.logger.info("Finetuning dataset loaded.")
 
-
-
     def get_feature_scaler(self):
         if self.args.stats_path:
-            with open(self.args.stats_path, 'r') as f: stats = yaml.safe_load(f)
-            return Scaler(scaler_type=self.args.features_scaler_type, stats_dict={'flux': stats['flux']}, target_names=['flux'])
+            with open(self.args.stats_path, 'r') as f:
+                stats = yaml.safe_load(f)
+            return Scaler(scaler_type=self.args.features_scaler_type, stats_dict={'flux': stats['flux']},
+                          target_names=['flux'])
         raise ValueError("没有提供特征统计数据文件路径")
 
     def get_label_scaler(self):
         if self.args.stats_path:
-            with open(self.args.stats_path, 'r') as f: stats = yaml.safe_load(f)
+            with open(self.args.stats_path, 'r') as f:
+                stats = yaml.safe_load(f)
             return Scaler(scaler_type=self.args.label_scaler_type, stats_dict=stats, target_names=self.targets)
         raise ValueError("没有提供标签统计数据文件路径")
-        
-    # --- ADDED: Reusable metric processing function ---
+
     def calculate_and_save_all_metrics(self, preds, trues, phase, save_as):
         if preds is None or trues is None: return None
-        #self.logger.info(f"Calculating and saving {save_as} metrics for {phase} set...")
+        # self.logger.info(f"Calculating and saving {save_as} metrics for {phase} set...")
         save_path = os.path.join(self.args.run_dir, 'metrics', save_as)
-        
+
         reg_metrics = calculate_metrics(preds, trues, self.args.targets)
         save_regression_metrics(reg_metrics, save_path, self.args.targets, phase=phase)
-        
+
         cls_metrics = calculate_feh_classification_metrics(preds, trues, self.args.feh_index)
         save_feh_classification_metrics(cls_metrics, save_path, phase=phase)
         return reg_metrics
 
-    def test_all(self):
-        # 1. Load model
+    def predict_folder(self):
+        # 1. Get paths
+        predict_data_path = self.args.predict_data_path
+        if not predict_data_path or not os.path.isdir(predict_data_path):
+            self.logger.error(f"Invalid or missing --predict_data_path: {predict_data_path}")
+            return
+
+        # 2. Create output directory
+        parent_dir = os.path.dirname(predict_data_path.rstrip('/'))
+        dir_name = os.path.basename(predict_data_path.rstrip('/'))
+        output_dir = os.path.join(parent_dir, f"{dir_name}_csv")
+        os.makedirs(output_dir, exist_ok=True)
+        self.logger.info(f"Prediction results will be saved to: {output_dir}")
+
+        # 3. Load model
         checkpoint_path = self.args.checkpoints
         if not (checkpoint_path and os.path.exists(checkpoint_path)):
-            self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting test_all.")
+            self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting.")
             return
         self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
         self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=False)
+        self.model.eval()
 
-        # 2. Get data path and create results path
-        test_data_root = self.args.test_data_path
-        if not test_data_root or not os.path.isdir(test_data_root):
-            self.logger.error(f"Invalid test_data_path: {test_data_root}")
+        # 4. Find feather files
+        feather_files = glob.glob(os.path.join(predict_data_path, '*.feather'))
+        if not feather_files:
+            self.logger.warning(f"No .feather files found in {predict_data_path}")
             return
-            
-        results_root = os.path.join(os.path.dirname(test_data_root.rstrip('/')), 'test_all_results_' + os.path.basename(test_data_root.rstrip('/')))
-        self.logger.info(f"Results will be saved in: {results_root}")
-        os.makedirs(results_root, exist_ok=True)
+        self.logger.info(f"Found {len(feather_files)} feather files to predict.")
 
-        # 3. Find all subdirectories (each is a dataset)
-        dataset_flags = [d for d in os.listdir(test_data_root) if os.path.isdir(os.path.join(test_data_root, d))]
+        # 5. Define custom Dataset for prediction
+        class PredictionDataset(Dataset):
+            def __init__(self, file_path, feature_scaler=None):
+                df = pd.read_feather(file_path)
+                self.obsids = None
+                if 'obsid' in df.columns:
+                    self.obsids = df['obsid'].values
+                    df_features = df.drop(columns=['obsid'])
+                else:
+                    df_features = df
 
-        if not dataset_flags:
-            self.logger.warning(f"No subdirectories found in {test_data_root}")
-            return
+                self.data_x = df_features.values
+                if feature_scaler:
+                    self.data_x = feature_scaler.transform(self.data_x)
 
-        original_root_path = self.args.root_path
-        self.args.root_path = test_data_root
+            def __getitem__(self, index):
+                # Return features and obsid if available
+                if self.obsids is not None:
+                    return self.data_x[index], self.obsids[index]
+                else:
+                    return self.data_x[index], index  # Use row index as a fallback ID
 
-        for flag in dataset_flags:
-            self.logger.info(f"--- Starting evaluation on '{flag}' data ---")
-            
-            try:
-                data, loader = data_provider(args=self.args, flag=flag, feature_scaler=self.feature_scaler, label_scaler=self.label_scaler)
-            except FileNotFoundError as e:
-                self.logger.error(f"Could not load data for '{flag}'. Missing file: {e}. Skipping.")
-                continue
+            def __len__(self):
+                return len(self.data_x)
 
-            if data is None or loader is None:
-                self.logger.warning(f"No data/loader for '{flag}' split. Skipping.")
-                continue
+        # 6. Loop through files and predict
+        for file_path in feather_files:
+            filename = os.path.basename(file_path)
+            self.logger.info(f"Predicting on file: {filename}")
 
-            save_dir = os.path.join(results_root, flag)
-            os.makedirs(save_dir, exist_ok=True)
+            dataset = PredictionDataset(file_path, self.feature_scaler)
+            dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=False,
+                                    num_workers=self.args.num_workers, drop_last=False)
 
-            loss, preds, trues, obsids = self.vali(data, loader, self._select_criterion())
+            all_preds = []
+            all_obsids = []
+            with torch.no_grad():
+                for batch_x, batch_obsids in dataloader:
+                    outputs = self.model(batch_x.float().to(self.device))
+                    preds = outputs.detach().cpu().numpy()
+                    all_preds.append(preds)
+                    all_obsids.extend(list(batch_obsids))
 
-            if preds is None:
-                self.logger.warning(f"Evaluation on '{flag}' returned no results. Skipping.")
-                continue
+            all_preds = np.concatenate(all_preds, axis=0)
 
-            self.logger.info(f"Saving predictions for '{flag}' to {save_dir}")
-            pred_df = pd.DataFrame({'obsid': obsids})
+            if self.label_scaler:
+                all_preds = self.label_scaler.inverse_transform(all_preds)
+
+            # Create result DataFrame
+            pred_df = pd.DataFrame()
+            pred_df['obsid'] = all_obsids
+
             for i, target_name in enumerate(self.targets):
-                pred_df[f'{target_name}_true'] = trues[:, i]
-                pred_df[f'{target_name}_pred'] = preds[:, i]
-            pred_df.to_csv(os.path.join(save_dir, 'predictions.csv'), index=False)
+                pred_df[f'{target_name}_pred'] = all_preds[:, i]
 
-            self.logger.info(f"Calculating and saving metrics for '{flag}'...")
-            original_run_dir = self.args.run_dir
-            self.args.run_dir = save_dir
-            
-            self.calculate_and_save_all_metrics(preds, trues, phase=flag, save_as='final')
-            
-            self.args.run_dir = original_run_dir
+            # Save to CSV
+            output_filename = os.path.splitext(filename)[0] + '.csv'
+            output_path = os.path.join(output_dir, output_filename)
+            pred_df.to_csv(output_path, index=False)
+            self.logger.info(f"Saved predictions to {output_path}")
 
-        self.args.root_path = original_root_path
-        self.logger.info("--- test_all completed ---")
+        self.logger.info("--- Folder prediction completed ---")

@@ -34,7 +34,7 @@ if __name__ == '__main__':
     # --- Basic Config ---
     parser.add_argument('--task_name', type=str, required=True, choices=['regression', 'spectral_prediction'],
                         help='task name: regression or spectral_prediction')
-    parser.add_argument('--is_training', type=int, required=True, default=1, help='1 for training, 0 for testing')
+    parser.add_argument('--is_training', type=int, required=True, default=1, help='1 for training, 0 for testing/prediction')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='A custom name for the model run')
     parser.add_argument('--model', type=str, required=True, default='CustomFusionNet', help='Name of the model to use')
     parser.add_argument('--model_conf', type=str, required=True, help='Path to the model-specific .yaml configuration file')
@@ -85,8 +85,9 @@ if __name__ == '__main__':
     # --- Augmentation ---
     parser.add_argument('--seed', type=int, default=42, help="Randomization seed")
 
-    parser.add_argument('--run_test_all', action='store_true', help='Run the test_all procedure on a directory of datasets')
-    parser.add_argument('--test_data_path', type=str, default=None, help='Path to the root folder for test_all datasets')
+    # --- Prediction ---
+    parser.add_argument('--predict', action='store_true', help='Run prediction on a folder of feather files')
+    parser.add_argument('--predict_data_path', type=str, default=None, help='Path to the folder with data for prediction mode')
 
     args = parser.parse_args()
     
@@ -111,9 +112,6 @@ if __name__ == '__main__':
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
-
-    #print('Args in experiment:')
-    #print_args(args)
 
     # --- Simplified Experiment Selection ---
     if args.task_name == 'regression':
@@ -145,10 +143,16 @@ if __name__ == '__main__':
 
             torch.cuda.empty_cache()
     else:
+        # --- Set up a temporary folder for non-training runs ---
+        setting = f'{args.model_id}_{args.task_name}_{args.model}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        run_dir = os.path.join('runs', '__temp', setting)
+        os.makedirs(run_dir, exist_ok=True)
+        args.run_dir = run_dir
+
         exp = Exp(args)
-        if args.run_test_all:
-            print('>>>>>>>running test_all : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
-            exp.test_all()
+        if args.predict:
+            print('>>>>>>> predicting from folder: {} <<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.predict_data_path))
+            exp.predict_folder()
         else:
-            print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
+            print('>>>>>>> testing : {} <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(args.model_id))
             exp.test()
