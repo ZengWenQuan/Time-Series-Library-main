@@ -33,4 +33,4 @@ local_branch_name: 'InceptionBranch'
 fusion_name: 'add'
 
 # 5. 预测头的名称
-head_name: 'MultiTaskHead'
+head_name: 'SimpleFFNMultiTaskHead'

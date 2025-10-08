@@ -178,6 +178,113 @@ training:
 
 通过修改这些参数，你可以精细地控制模型的训练行为，以适应不同的实验需求。
 
+## 框架深度解析 (In-Depth Framework Architecture)
+
+本节将深入介绍框架的核心组件，包括模型库的目录结构、动态YAML配置系统以及模块的自动注册机制，旨在帮助开发者更好地理解和扩展本框架。
+
+### 1. 模型库目录结构 (`models/`)
+
+`models/` 目录是框架的核心，所有与模型构建相关的代码都存放于此。其子目录按功能划分，结构清晰，便于维护和扩展。
+
+-   `models/spectral_prediction/`: **顶层模型 (Top-Level Models)**
+    -   **作用**: 定义最终被执行的完整模型，例如 `DualBranchSpectralModel`。这些模型负责接收原始输入，调用不同的分支和融合模块，并最终通过预测头输出结果。
+    -   **实现**: 这里的每个模型类都通过 `@register_model` 装饰器注册到主模型注册器中。
+
+-   `models/backbones/`: **主干网络 (Backbones)**
+    -   **作用**: 存放通用的、可重用的特征提取网络。这些网络通常是构成各个分支的核心，例如 `ResNet`, `InceptionTime` 等。
+    -   **实现**: 模块通过 `@register_backbone` 装饰器注册。
+
+-   `models/submodules/`: **基础子模块 (Submodules)**
+    -   **作用**: 存放构成更复杂模块的基础组件，是模型架构中最细粒度的可重用单元。例如，`attention.py` 中的各种注意力实现、`fusion_blocks.py` 中的特征融合块等。
+    -   **实现**: 根据功能，使用 `@register_block`, `@register_fusion` 等装饰器注册。
+
+-   `models/heads/`: **预测头 (Prediction Heads)**
+    -   **作用**: 模型的最后一部分，负责将经过主干网络和融合模块处理后的高级特征映射到最终的输出（例如，恒星参数）。
+    -   **实现**: 模块通过 `@register_head` 装饰器注册。
+
+-   `models/blocks/`: **通用模块块 (General Blocks)**
+    -   **作用**: 存放比 `submodules` 更大一些的通用模块，这些模块本身可能由多个子模块构成，但又不足以成为一个完整的分支或主干。
+    -   **实现**: 模块通过 `@register_block` 装饰器注册。
+
+-   `models/registries.py`: **注册器中心 (Registry Hub)**
+    -   **作用**: 定义了项目中所有的注册器实例（如 `MODEL_REGISTRY`, `BACKBONES`）和注册装饰器（如 `@register_model`, `@register_backbone`）。这是实现框架“即插即用”特性的基石。
+
+### 2. 动态YAML配置系统
+
+本框架采用了一套强大且灵活的动态配置系统，允许用户通过组合不同的YAML文件来构建复杂的模型，而无需修改任何Python代码。
+
+**核心机制**: 该系统的核心逻辑位于 `exp/exp_basic.py` 的 `_load_and_merge_configs` 方法中。其工作流程如下：
+
+1.  **加载主配置文件**: 训练开始时，程序会首先加载一个**主配置文件**（例如 `conf/dualbranchspectral.yaml`）。
+2.  **解析模块名称**: 主配置文件中并不包含所有参数，而是为模型的各个部分（如 `backbone_name`, `fusion_name`）指定一个名称。
+3.  **动态加载子配置**: 程序根据主配置中指定的名称，在 `conf/` 下对应的子目录中查找并加载**子配置文件**。例如，如果主配置中指定 `backbone_name: "ResNet50Backbone1D"`，程序就会自动加载 `conf/backbone/ResNet50Backbone1D.yaml` 文件。
+4.  **合并配置**: 所有子配置文件的内容会被合并到主配置中，形成一个完整的配置字典，供模型初始化使用。
+
+**示例**:
+
+假设我们有以下文件结构：
+```
+conf/
+├── dualbranchspectral.yaml   # 主配置
+└── backbone/
+    └── ResNet50Backbone1D.yaml # 子配置
+```
+
+**主配置 (`dualbranchspectral.yaml`)**:
+```yaml
+name: "DualBranchSpectralModel"
+backbone_name: "ResNet50Backbone1D"  # <-- 指向子配置的名称
+# ... 其他分支和头的名称 ...
+```
+
+**子配置 (`backbone/ResNet50Backbone1D.yaml`)**:
+```yaml
+# ResNet50Backbone1D 模块的具体参数
+in_channels: 1
+layers: [3, 4, 6, 3]
+# ... 其他参数 ...
+```
+
+在运行时，框架会自动将 `ResNet50Backbone1D.yaml` 的内容加载到最终配置的 `backbone_config` 键下，模型在初始化时便可直接访问这些详细参数。
+
+### 3. 模块自动注册机制
+
+为了实现上述配置系统的动态加载，框架使用了一套基于装饰器的自动注册机制。
+
+**核心机制**: 该机制的核心位于 `models/registries.py` 文件中。
+
+1.  **注册器实例**: 文件中定义了多个全局字典作为注册器，例如 `MODEL_REGISTRY` 用于存放顶层模型，`BACKBONES` 用于存放主干网络等。
+2.  **注册装饰器**: 文件为每种类型的模块提供了对应的注册装饰器，例如 `@register_model`, `@register_backbone`。
+3.  **自动注册**: 当你在代码中定义一个新模块并为其加上相应的装饰器时，该模块的类名（或自定义名称）和类本身会自动被添加到一个全局注册器字典中。
+
+**示例**: 如何注册一个新的主干网络。
+
+```python
+# in models/backbones/my_new_backbone.py
+
+from torch import nn
+from models.registries import register_backbone # 1. 导入装饰器
+
+@register_backbone # 2. 使用装饰器注册
+class MyNewBackbone(nn.Module):
+    def __init__(self, config): # 构造函数接收合并后的配置字典
+        super().__init__()
+        # ... 你的网络实现 ...
+
+    def forward(self, x):
+        # ... 前向传播 ...
+        return x
+```
+
+**工作流程**:
+1.  当Python解释器加载 `my_new_backbone.py` 文件时，`@register_backbone` 装饰器会立即执行。
+2.  它将 `MyNewBackbone` 类的名称 `"MyNewBackbone"` 作为键，类本身作为值，存入 `BACKBONES` 这个全局字典中。
+3.  在模型构建时 (`_build_model` 函数)，代码从YAML配置中读取模型/模块的名称（例如 `"MyNewBackbone"`）。
+4.  然后以该名称为键，在对应的注册器字典（例如 `BACKBONES`）中查找并获取到 `MyNewBackbone` 这个类。
+5.  最后，使用获取到的类和配置字典来实例化模块：`MyNewBackbone(config)`。
+
+通过这套机制，任何新添加的、只要被正确注册的模块，都可以立即通过修改YAML配置文件来被框架发现和使用，实现了真正意义上的“即插即用”。
+
 
 ## 📄 许可证
 

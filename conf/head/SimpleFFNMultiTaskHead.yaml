@@ -1,0 +1,16 @@
+# Configuration for the SimpleFFNMultiTaskHead
+# This configures a simple multi-task head where each target parameter
+# is predicted by a separate Feed-Forward Network (FFN).
+name : SimpleFFNMultiTaskHead
+
+# The dimension of the flattened feature vector coming from the fusion layer.
+# This MUST be set correctly to match the output of the preceding fusion module.
+in_features: 512
+
+# A list of integers defining the size of the hidden layers for each FFN.
+# The example [256, 128] creates two hidden layers.
+# An empty list [] would mean a direct linear mapping from input to output.
+hidden_dims: [256, 128]
+
+# The dropout rate to be applied after each hidden layer's activation.
+dropout: 0.1
