@@ -165,7 +165,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
                     outputs = self.model(batch_x.float().to(self.device))
                     preds = outputs.detach().cpu().numpy()
                     all_preds.append(preds)
-                    all_obsids.extend(list(batch_obsids))
+                    all_obsids.extend(batch_obsids.tolist())
 
             all_preds = np.concatenate(all_preds, axis=0)
 
