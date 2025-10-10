@@ -450,7 +450,10 @@ class Exp_Basic(object):
             current_feh_mae= vali_reg_metrics['FeH_mae']
             if current_feh_mae < best_feh_mae:
                 best_feh_mae = current_feh_mae
-                torch.save(self.model.state_dict(), chechpoint_path + '/' + 'best.pth')
+                # 清理state_dict，移除thop等分析工具可能添加的非参数键
+                state_dict = self.model.state_dict()
+                clean_state_dict = {k: v for k, v in state_dict.items() if 'total_ops' not in k and 'total_params' not in k}
+                torch.save(clean_state_dict, chechpoint_path + '/' + 'best.pth')
 
                 self.logger.info(f"New best  FeH MAE: {best_feh_mae:.4f}. Saving metrics for this epoch as 'best'...")
                 self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")

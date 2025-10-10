@@ -54,7 +54,11 @@ class EarlyStopping:
         self.delta = delta
 
     def __call__(self, val_loss, model, path):
-        torch.save(model.state_dict(), path + '/' + 'last.pth')
+        # Clean the state_dict before saving to remove profiler keys
+        state_dict = model.state_dict()
+        clean_state_dict = {k: v for k, v in state_dict.items() if 'total_ops' not in k and 'total_params' not in k}
+        torch.save(clean_state_dict, path + '/' + 'last.pth')
+
         if val_loss<self.val_loss_min:
             self.val_loss_min = val_loss
             self.counter=0
