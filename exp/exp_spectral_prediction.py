@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 import glob
+import copy
 
 warnings.filterwarnings('ignore')
 
@@ -124,44 +125,29 @@ class Exp_Spectral_Prediction(Exp_Basic):
             return
         self.logger.info(f"Found {len(feather_files)} feather files to predict.")
 
-        # 5. Define custom Dataset for prediction
-        class PredictionDataset(Dataset):
-            def __init__(self, file_path, feature_scaler=None):
-                df = pd.read_feather(file_path)
-                self.obsids = None
-                if 'obsid' in df.columns:
-                    self.obsids = df['obsid'].values
-                    df_features = df.drop(columns=['obsid'])
-                else:
-                    df_features = df
-
-                self.data_x = df_features.values
-                if feature_scaler:
-                    self.data_x = feature_scaler.transform(self.data_x)
-
-            def __getitem__(self, index):
-                # Return features and obsid if available
-                if self.obsids is not None:
-                    return self.data_x[index], self.obsids[index]
-                else:
-                    return self.data_x[index], index  # Use row index as a fallback ID
-
-            def __len__(self):
-                return len(self.data_x)
-
-        # 6. Loop through files and predict
+        # 5. Loop through files and predict using the main data_provider
         for file_path in feather_files:
             filename = os.path.basename(file_path)
             self.logger.info(f"Predicting on file: {filename}")
 
-            dataset = PredictionDataset(file_path, self.feature_scaler)
-            dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=False,
-                                    num_workers=self.args.num_workers, drop_last=False)
+            # Create a temporary args object for prediction to avoid side effects
+            pred_args = copy.deepcopy(self.args)
+            pred_args.root_path = file_path # Set the full file path as root_path
+            pred_args.feature_filename = '' # Not needed as root_path is the full path
+            pred_args.labels_filename = ''  # Not needed
+
+            # Use data_provider to load the prediction data
+            _, dataloader = data_provider(
+                args=pred_args, 
+                flag='', # Flag is ignored when has_labels is False
+                feature_scaler=self.feature_scaler, 
+                has_labels=False
+            )
 
             all_preds = []
             all_obsids = []
             with torch.no_grad():
-                for batch_x, batch_obsids in dataloader:
+                for batch_x, _, batch_obsids in dataloader:
                     outputs = self.model(batch_x.float().to(self.device))
                     preds = outputs.detach().cpu().numpy()
                     all_preds.append(preds)

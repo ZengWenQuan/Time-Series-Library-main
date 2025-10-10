@@ -32,11 +32,11 @@ data_dict = {
 }
 
 
-def data_provider(args, flag, label_scaler=None, feature_scaler=None):
+def data_provider(args, flag, label_scaler=None, feature_scaler=None, has_labels=True):
     Data = data_dict[args.data] # 根据args.dataset选择数据集类
     # timeenc = 0 if args.embed != 'timeF' else 1
 
-    shuffle_flag = False if (flag == 'test' or flag == 'TEST') else True
+    shuffle_flag = False if (flag == 'test' or flag == 'TEST' or not has_labels) else True
     drop_last = False
     batch_size = args.batch_size
     # freq = args.freq
@@ -95,7 +95,8 @@ def data_provider(args, flag, label_scaler=None, feature_scaler=None):
             args=args,
             flag=flag,
             label_scaler=label_scaler,
-            feature_scaler=feature_scaler
+            feature_scaler=feature_scaler,
+            has_labels=has_labels
         )
         print(flag, len(data_set))
         data_loader = DataLoader(
