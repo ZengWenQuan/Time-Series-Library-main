@@ -5,7 +5,7 @@ conv_pyramid:
   # concat策略, in_channels = C1+C2 = 64+64 = 128
   in_channels: 64
   layers:
-    - {out_channels: 128, kernel_size: 3, pool_size: 2}
-    - {out_channels: 64, kernel_size: 3, pool_size: 2}
+    - {out_channels: 32, kernel_size: 3, pool_size: 2}
+    - {out_channels: 16, kernel_size: 3, pool_size: 2}
 ffn_layers: [512,128, 32]
 dropout: 0

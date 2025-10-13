@@ -387,9 +387,10 @@ class Exp_Basic(object):
                 _,self.train_loader=self._get_finetune_data()
                 self.args.run_dir=self.args.run_dir+'finetune'
                 for param_group in model_optim.param_groups:
-                    param_group['lr'] = self.args.learning_rate / 10
+                    param_group['lr'] = self.args.learning_rate / 100
                 model_optim = self._select_optimizer(freeze_body=True) #冻结
-
+                early_stopping.val_loss_min=1e9
+                best_feh_mae=1e9
             epoch_grad_norms = [] #<-- ADDED
             self.model.train()
             train_loss = []
