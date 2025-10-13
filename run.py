@@ -71,9 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default=None, help='Path to a checkpoint to resume training from')
 
     # --- Finetuning ---
-    parser.add_argument('--disable_finetune', dest='do_finetune', action='store_false', help='Disable the finetuning phase (which is on by default)')
-    parser.add_argument('--finetune_lr', type=float, default=1e-1, help='Optional: Custom learning rate for finetuning')
-    parser.add_argument('--finetune_epochs', type=int, default=10, help='Optional: Custom number of epochs for finetuning')
+    parser.add_argument('--freeze_body', action='store_true', help='Freeze the model body and only train the prediction head (finetuning mode). Requires --checkpoints.')
 
     # --- GPU ---
     parser.add_argument('--use_gpu', type=bool, default=True, help='Use GPU')
@@ -90,6 +88,10 @@ if __name__ == '__main__':
     parser.add_argument('--predict_data_path', type=str, default=None, help='Path to the folder with data for prediction mode')
 
     args = parser.parse_args()
+
+    # --- Validation ---
+    if args.freeze_body and not args.checkpoints:
+        parser.error("--freeze_body requires --checkpoints to be set with a path to a pre-trained model.")
     
     fix_seed(args.seed)
     
