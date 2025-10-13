@@ -43,6 +43,22 @@ class Exp_Spectral_Prediction(Exp_Basic):
                                                          feature_scaler=self.feature_scaler,
                                                          label_scaler=self.label_scaler)
 
+    def _get_finetune_data(self):
+        """
+        Loads the finetuning dataset by setting a temporary flag in args.
+        """
+        # Set is_finetune flag in args
+        self.args.is_finetune = True
+        self.logger.info("Loading finetuning dataset...")
+
+        self.finetune_train_data, self.finetune_train_loader = data_provider(args=self.args, flag='train',
+                                                                             feature_scaler=self.feature_scaler,
+                                                                             label_scaler=self.label_scaler)
+        # Unset the flag to avoid side effects in other parts of the code
+        self.args.is_finetune = False
+        self.logger.info("Finetuning dataset loaded.")
+        return self.finetune_train_data, self.finetune_train_loader
+
     def get_feature_scaler(self):
         if self.args.stats_path:
             with open(self.args.stats_path, 'r') as f:

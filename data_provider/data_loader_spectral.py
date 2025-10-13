@@ -11,8 +11,8 @@ class Dataset_Spectral(Dataset):
             assert flag in ['train', 'test', 'val']
         self.flag = flag
         self.has_labels = has_labels
-        # Get the finetune flag from the main args object
-        self.is_finetune_mode = getattr(args, 'freeze_body', False)
+        # Check for the temporary flag set by _get_finetune_data
+        self.is_finetune = getattr(args, 'is_finetune', False)
 
         self.args = args
         self.root_path = args.root_path
@@ -48,26 +48,30 @@ class Dataset_Spectral(Dataset):
         if self.has_labels and label_path and os.path.exists(label_path):
             df_label = pd.read_csv(label_path, index_col=0)
 
-            # --- NEW FINETUNING FILTER LOGIC ---
-            if self.is_finetune_mode and self.flag == 'train':
-                print("Finetuning mode active: Filtering training data for FeH < -2.")
-                feh_col_name = df_label.columns[self.args.feh_index]
+            # --- Finetuning Filter Logic ---
+            if self.is_finetune and self.flag == 'train':
+                print("Finetuning mode active: Filtering training data for FeH < -1.")
+                feh_col_name ='FeH'# df_label.columns[self.args.feh_index]
                 
-                # Ensure data is aligned before filtering
                 common_indices = df_feature.index.intersection(df_label.index)
                 df_feature = df_feature.loc[common_indices]
                 df_label = df_label.loc[common_indices]
                 original_size = len(df_label)
 
-                # Apply the filter
-                keep_indices = df_label[df_label[feh_col_name] < -2].index
+                keep_indices = df_label[df_label[feh_col_name] < -1].index
                 
                 df_label = df_label.loc[keep_indices]
                 df_feature = df_feature.loc[keep_indices]
                 
                 filtered_size = len(df_label)
                 print(f"Training dataset size reduced from {original_size} to {filtered_size} for finetuning.")
-            # --- END OF NEW LOGIC ---
+
+                if filtered_size == 0:
+                    raise ValueError(
+                        f"No training data remaining after filtering for '{feh_col_name} < -2'. "
+                        "Cannot proceed with an empty finetuning dataset."
+                    )
+            # --- End of Logic ---
 
             common_obsids = df_feature.index.intersection(df_label.index)
             

@@ -269,12 +269,15 @@ class Exp_Basic(object):
         self.vali_data, self.vali_loader = None
         raise NotImplementedError("Subclasses must implement _get_data()")
 
+    def _get_finetune_data(self):
+        raise NotImplementedError("Subclasses must implement _get_finetune_data() to be able to finetune.")
 
-    def _select_optimizer(self):
+
+    def _select_optimizer(self,freeze_body=False):
         # --- Optimizer Selection ---
         import torch.optim as optim
 
-        if getattr(self.args, 'freeze_body', False):
+        if freeze_body:
             self.logger.info("Freezing model body, only training the head.")
             
             # First, make sure we're dealing with the base model if it's wrapped
@@ -376,7 +379,17 @@ class Exp_Basic(object):
         history_train_loss, history_vali_loss, history_lr = [], [], []
         best_feh_mae = float('inf') # ADDED: Initialize tracker
         epoch_time=time.time()
-        for epoch in range(self.args.train_epochs):
+        is_finetune=False
+        for epoch in range(self.args.train_epochs +self.args.finetune_epoch):
+            if epoch>self.args.train_epochs and not is_finetune:
+                is_finetune=True
+                self.logger.info('--------------------begin finetune-------------------------')
+                _,self.train_loader=self._get_finetune_data()
+                self.args.run_dir=self.args.run_dir+'finetune'
+                for param_group in model_optim.param_groups:
+                    param_group['lr'] = self.args.learning_rate / 10
+                model_optim = self._select_optimizer(freeze_body=True) #冻结
+
             epoch_grad_norms = [] #<-- ADDED
             self.model.train()
             train_loss = []
@@ -457,7 +470,7 @@ class Exp_Basic(object):
                 self.calculate_and_save_all_metrics(train_preds, train_trues, "train", "best")
                 self.calculate_and_save_all_metrics(vali_preds, vali_trues, "val", "best")
 
-            if early_stopping.early_stop: break
+            if early_stopping.early_stop: epoch=self.args.train_epochs #进入微调阶段
             if scheduler is not None: scheduler.step() 
 
             save_history_plot(history_train_loss, history_vali_loss, history_lr, self.args.run_dir)
@@ -568,31 +581,31 @@ class Exp_Basic(object):
 
     def _select_criterion(self):
         return select_criterion(self.args.loss)        
-    def _setup_logger(self):
+    def _setup_logger(self, force_reinit=False):
         import datetime
-        # Prevent the logger from propagating to the root logger 
-        self.logger = logging.getLogger('CEMP_search')        
-        self.logger.setLevel(logging.INFO)   
+        self.logger = logging.getLogger('CEMP_search')
         self.logger.propagate = False
-        
-        # Formatter - 使用 %(asctime)s 来动态显示时间
-        formatter = BeijingTimeFormatter(
-            'CEMP search - %(asctime)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S' # 可选：定义时间格式
-        )
-        
-        # File Handler        
-        log_file = os.path.join(self.args.run_dir, 'training.log')        
-        file_handler = logging.FileHandler(log_file)        
-        file_handler.setLevel(logging.INFO)        
-        file_handler.setFormatter(formatter)
-        
-        # Stream Handler (for console output)        
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)        
-        stream_handler.setFormatter(formatter)
-        
-        # Add handlers to the logger        
-        if not self.logger.handlers:            
-            self.logger.addHandler(file_handler)            
+
+        if force_reinit and self.logger.hasHandlers():
+            for handler in self.logger.handlers[:]:
+                handler.close()
+                self.logger.removeHandler(handler)
+
+        if not self.logger.handlers:
+            self.logger.setLevel(logging.INFO)
+            formatter = BeijingTimeFormatter(
+                'CEMP search - %(asctime)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            
+            log_file = os.path.join(self.args.run_dir, 'training.log')
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(formatter)
+            
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(logging.INFO)
+            stream_handler.setFormatter(formatter)
+            
+            self.logger.addHandler(file_handler)
             self.logger.addHandler(stream_handler)
