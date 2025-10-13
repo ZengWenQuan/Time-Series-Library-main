@@ -90,7 +90,7 @@ class Exp_Spectral_Prediction(Exp_Basic):
             self.logger.error(f"No valid checkpoint path provided via --checkpoints. Aborting.")
             return
         self.logger.info(f"Loading model from provided checkpoint: {checkpoint_path}")
-        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=True)
+        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device), strict=False)
         self.model.eval()
 
         # 4. Find feather files

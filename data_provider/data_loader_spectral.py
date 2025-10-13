@@ -95,8 +95,8 @@ class Dataset_Spectral(Dataset):
             self._calculate_and_print_stats(df_feature, "Features", stat_type='feature')
             self._calculate_and_print_stats(pd.DataFrame(data_label_raw, columns=self.args.targets), "Labels", stat_type='label')
 
-        if self.feature_scaler:
-            self.data_feature = self.feature_scaler.transform(self.data_feature)
+        # if self.feature_scaler:
+        #     self.data_feature = self.feature_scaler.transform(self.data_feature)
 
         print(f"[{self.__class__.__name__}] flag: {self.flag if self.has_labels else 'predict'}")
         print(f"feature shape: {self.data_feature.shape}, label shape: {self.data_label.shape}")
